@@ -160,4 +160,40 @@ class MonitorService:
         return {"ok": True, "deleted": image_id}
 
 
+    async def server_list_text(self):
+        rows = await self.collect()
+        if not rows:
+            return "暂无服务器"
+        return "\n".join([f"{r['id']} | {r['name']} | {r['status']} | {r['ip']} | {round(r['ratio']*100,2)}%" for r in rows])
+
+    async def traffic_text(self, server_id: int):
+        rows = await self.collect()
+        row = next((r for r in rows if r['id'] == server_id), None)
+        if not row:
+            return "未找到服务器"
+        return f"{row['name']}\n本月已用: {row['used_tb']} TB / {row['limit_tb']} TB\n占比: {round(row['ratio']*100,2)}%"
+
+    async def today_text(self, server_id: int):
+        daily = await self.client.get_outbound_daily(server_id, days=2)
+        if not daily:
+            return "暂无今日流量数据"
+        today = daily[-1]
+        gb = today['bytes'] / 1024 / 1024 / 1024
+        return f"服务器 {server_id} 今日出流量: {gb:.2f} GB"
+
+    async def op_server(self, cmd: str, server_id: int, extra: str | None = None):
+        if cmd == 'start':
+            return await self.client.server_action(server_id, 'poweron')
+        if cmd == 'stop':
+            return await self.client.server_action(server_id, 'poweroff')
+        if cmd == 'reboot':
+            return await self.client.server_action(server_id, 'reboot')
+        if cmd == 'rebuild':
+            image = extra or 'debian-12'
+            return await self.client.server_action(server_id, 'rebuild', {'image': image})
+        if cmd == 'delete':
+            return {'ok': await self.client.delete_server(server_id)}
+        return {'ok': False, 'error': 'unsupported cmd'}
+
+
 monitor = MonitorService()

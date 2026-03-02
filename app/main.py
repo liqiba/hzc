@@ -7,12 +7,14 @@ from pydantic import BaseModel
 
 from app.config import settings
 from app.service import monitor
+from app.telegram_control import TelegramControl
 
 app = FastAPI(title="Hetzner Traffic Guard")
 app.mount('/static', StaticFiles(directory='app/static'), name='static')
 templates = Jinja2Templates(directory='app/templates')
 
 scheduler = AsyncIOScheduler(timezone=settings.timezone)
+tg_control = TelegramControl(monitor)
 
 
 class CreateServerReq(BaseModel):
@@ -27,6 +29,9 @@ async def startup_event():
     if settings.hetzner_token:
         scheduler.add_job(monitor.rotate_if_needed, 'interval', minutes=settings.check_interval_minutes, id='check-traffic', replace_existing=True)
         scheduler.start()
+    if tg_control.enabled:
+        import asyncio
+        asyncio.create_task(tg_control.run())
 
 
 @app.get('/', response_class=HTMLResponse)
