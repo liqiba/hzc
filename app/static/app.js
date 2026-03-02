@@ -118,8 +118,9 @@ function showTypePrice(){
     const state=stockState(t,loc)
     st=`库存状态：${state}`
     if(p?.price_monthly?.gross){
-      txt=`约 €${p.price_monthly.gross} /月（${p.location}）`
-      est=`创建前费用预估：月费 €${p.price_monthly.gross}（不含超额流量）`
+      const pm=Number(p.price_monthly.gross||0).toFixed(2)
+      txt=`约 €${pm} /月（${p.location}）`
+      est=`创建前费用预估：月费 €${pm}（不含超额流量）`
     }
   }
   byId('typePrice').textContent=txt
@@ -161,7 +162,7 @@ async function snapshot(id){
   const eRes=await fetch(`/api/snapshot_estimate/${id}`)
   const est=await eRes.json()
   if(!eRes.ok || !est?.ok){ alert('无法获取快照费用预估：'+(est?.detail||est?.error||'unknown')); return }
-  const msg=`服务器: ${est.server_name}\n磁盘总量: ${est.disk_gb} GB\n预估快照体积: ${est.estimated_snapshot_size_gb} GB\n预估月费用: €${est.estimated_monthly_eur}\n说明: ${est.estimation_note}\n\n确认创建快照？`
+  const msg=`服务器: ${est.server_name}\n磁盘总量: ${Number(est.disk_gb||0).toFixed(2)} GB\n预估快照体积: ${Number(est.estimated_snapshot_size_gb||0).toFixed(2)} GB\n预估月费用: €${Number(est.estimated_monthly_eur||0).toFixed(2)}\n说明: ${est.estimation_note}\n\n确认创建快照？`
   if(!confirm(msg)) return
   const res=await fetch(`/api/snapshot/${id}`,{method:'POST'})
   const data=await res.json()
