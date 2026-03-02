@@ -27,7 +27,7 @@ class HetznerClient:
             return r.json().get("locations", [])
 
     async def list_snapshots(self):
-        params = {"type": "snapshot", "bound_to": "null"}
+        params = {"type": "snapshot"}
         async with httpx.AsyncClient(timeout=30) as c:
             r = await c.get(f"{BASE}/images", headers=self.headers, params=params)
             r.raise_for_status()

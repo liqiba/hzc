@@ -16,7 +16,10 @@ class MonitorService:
     async def meta(self):
         types = await self.client.list_server_types()
         locations = await self.client.list_locations()
-        snapshots = await self.client.list_snapshots()
+        try:
+            snapshots = await self.client.list_snapshots()
+        except Exception:
+            snapshots = []
         return {
             "server_types": [
                 {
