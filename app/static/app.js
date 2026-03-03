@@ -63,6 +63,13 @@ function formatTB2(bytes){
   return `${(Number(bytes||0)/1024/1024/1024/1024).toFixed(4)} TB`
 }
 
+function formatTBPrecise(v){
+  const n=Number(v||0)
+  let s=n.toFixed(8)
+  s=s.replace(/\.0+$/,'').replace(/(\.\d*?)0+$/,'$1')
+  return `${s} TB`
+}
+
 function rowHtml(r){
   const pct=Math.min(100,(r.ratio||0)*100),warn=r.over_threshold
   const daily=DAILY_MAP[r.id]||[]
@@ -93,7 +100,7 @@ function rowHtml(r){
     <td>${r.ip||''}</td>
     <td><span class="badge ${r.status==='running'?'running':'other'}">${r.status}</span></td>
     <td>${qbCell}</td>
-    <td>${formatIEC(r.used_bytes)} (${(Number(r.used_tb||0)).toFixed(4)} TB)</td><td>${todayCell}</td><td>${r.limit_tb} TB</td>
+    <td>${formatIEC(r.used_bytes)} (${formatTBPrecise(r.used_tb)})</td><td>${todayCell}</td><td>${formatTBPrecise(r.limit_tb)}</td>
     <td><div class="progress"><div class="bar ${warn?'warn':''}" style="width:${pct}%"></div></div><div class="ratio-text">${pct.toFixed(1)}%</div></td>
     <td>
       <button class="btn action" onclick="openQBModal(${r.id})">配置qB</button>
