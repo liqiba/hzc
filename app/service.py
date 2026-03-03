@@ -156,9 +156,47 @@ class MonitorService:
         await self.tg.send(f"📸 Snapshot started for server {server_id}: {description}")
         return {"ok": True, "message": "snapshot job started", "action": res.get("action", {})}
 
+    @staticmethod
+    def _extract_password(payload: dict):
+        if not isinstance(payload, dict):
+            return None
+        # Common places where Hetzner may return temporary root password
+        candidates = [
+            payload.get("root_password"),
+            (payload.get("action") or {}).get("root_password"),
+            (payload.get("next_actions") or [{}])[0].get("root_password") if payload.get("next_actions") else None,
+        ]
+        for c in candidates:
+            if c:
+                return c
+        return None
+
+    async def reset_password_and_notify(self, server_id: int, server_name: str | None = None):
+        res = await self.client.server_action(server_id, "reset_password")
+        pwd = self._extract_password(res)
+        if pwd:
+            await self.tg.send(f"🔐 服务器密码已重置\nID: {server_id}\n名称: {server_name or '-'}\n新密码: {pwd}")
+            return {"ok": True, "server_id": server_id, "new_password": pwd}
+        await self.tg.send(f"⚠️ 服务器 {server_id} 已触发重置密码，但未在响应中拿到明文密码，请到 Hetzner Console 查看 Action 结果。")
+        return {"ok": True, "server_id": server_id, "new_password": None, "note": "password not returned by api response"}
+
     async def create_server_manual(self, name: str, server_type: str, location: str, image):
         created = await self.client.create_server(name=name, server_type=server_type, location=location, image=image)
-        await self.tg.send(f"🆕 New server created: {created.get('server', {}).get('name', name)}")
+        srv = created.get("server", {})
+        sid = srv.get("id")
+        sname = srv.get("name", name)
+        await self.tg.send(f"🆕 New server created: {sname} (ID: {sid})")
+
+        # Try directly from create response, fallback to reset-password workflow.
+        pwd = self._extract_password(created)
+        if pwd:
+            await self.tg.send(f"🔐 新服务器初始密码\nID: {sid}\n名称: {sname}\n密码: {pwd}")
+            created["new_password"] = pwd
+            return created
+
+        if sid:
+            rp = await self.reset_password_and_notify(sid, sname)
+            created["password_reset"] = rp
         return created
 
     async def delete_snapshot_manual(self, image_id: int):

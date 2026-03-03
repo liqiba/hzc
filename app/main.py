@@ -93,3 +93,10 @@ async def delete_snapshot(image_id: int):
     if not settings.hetzner_token:
         raise HTTPException(status_code=500, detail='HETZNER_TOKEN missing')
     return await monitor.delete_snapshot_manual(image_id)
+
+
+@app.post('/api/reset_password/{server_id}')
+async def reset_password(server_id: int):
+    if not settings.hetzner_token:
+        raise HTTPException(status_code=500, detail='HETZNER_TOKEN missing')
+    return await monitor.reset_password_and_notify(server_id)

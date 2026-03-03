@@ -41,6 +41,7 @@ class TelegramControl:
             {"command": "reboot", "description": "重启"},
             {"command": "delete", "description": "删除"},
             {"command": "rebuild", "description": "重建"},
+            {"command": "resetpwd", "description": "重置并获取密码"},
         ]
         await self.api("setMyCommands", {"commands": cmds})
 
@@ -54,7 +55,7 @@ class TelegramControl:
                 "命令:\n"
                 "/list 服务器列表\n/status 系统状态\n/traffic <ID> 流量详情\n/today <ID> 今日流量\n/report 流量汇总\n"
                 "/snapshots 快照列表\n/createsnapshot <ID> [confirm] 创建快照\n/createfromsnapshot <snapshot_id> <type> <location> <name>\n"
-                "/startserver <ID> /stopserver <ID> /reboot <ID>\n/delete <ID> confirm /rebuild <ID> [image]\n"
+                "/startserver <ID> /stopserver <ID> /reboot <ID>\n/delete <ID> confirm /rebuild <ID> [image]\n/resetpwd <ID> 重置并发送新密码\n"
                 "/scheduleon /scheduleoff /schedulestatus (预留)\n/dnscheck /dnstest (预留)",
                 chat_id,
             )
@@ -101,6 +102,11 @@ class TelegramControl:
             snap_id, stype, loc, name = parts[1], parts[2], parts[3], parts[4]
             res = await self.monitor.create_server_manual(name=name, server_type=stype, location=loc, image=int(snap_id))
             return await self.send(f"已创建: {res.get('server',{}).get('name',name)}", chat_id)
+
+        if cmd == "/resetpwd" and len(parts) >= 2:
+            sid = int(parts[1])
+            res = await self.monitor.reset_password_and_notify(sid)
+            return await self.send(f"已提交重置密码: {sid}\n{str(res)[:600]}", chat_id)
 
         if cmd in ["/startserver", "/stopserver", "/reboot", "/delete", "/rebuild"] and len(parts) >= 2:
             sid = int(parts[1])
