@@ -64,7 +64,16 @@ function rowHtml(r){
 
   const q=r.qb||{}
   const qbCell = q.enabled
-    ? `<span>↑ ${formatIECps(q.up_speed)} / ↓ ${formatIECps(q.dl_speed)}</span> · <span class='daily-mini'>↑ ${formatIEC(q.up_total)} / ↓ ${formatIEC(q.dl_total)} · 任务 ${q.active_torrents||0}/${q.all_torrents||0}</span>`
+    ? `<div class='qb-line'>
+         <span class='qb-col'>↑ ${formatIECps(q.up_speed)}</span>
+         <span class='qb-col'>↓ ${formatIECps(q.dl_speed)}</span>
+         <span class='qb-col'>任务 ${q.active_torrents||0}/${q.all_torrents||0}</span>
+       </div>
+       <div class='qb-line daily-mini'>
+         <span class='qb-col'>↑ ${formatIEC(q.up_total)}</span>
+         <span class='qb-col'>↓ ${formatIEC(q.dl_total)}</span>
+         <span class='qb-col'>${q.connection_status||'unknown'}</span>
+       </div>`
     : `<span class='daily-mini'>未配置</span>`
 
   return `<tr>
