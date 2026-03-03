@@ -6,7 +6,8 @@ from app.telegram_bot import Tg
 from app.qb_client import QBClient
 from app.qb_store import QBStore
 
-BYTES_IN_TB = 1024**4
+# Hetzner traffic quota is decimal TB (10^12 bytes)
+BYTES_IN_TB = 10**12
 
 
 class MonitorService:
@@ -65,7 +66,11 @@ class MonitorService:
             qb_tasks[str(sid)] = asyncio.create_task(QBClient.fetch_stats(node.get("url", ""), node.get("username", ""), node.get("password", "")))
 
         for s in servers:
-            outbound = await self.client.get_outbound_bytes_month(s["id"])
+            # Billing-consistent logic: Hetzner official traffic OUT (external upload only)
+            outbound = int(s.get("outgoing_traffic") or 0)
+            if outbound <= 0:
+                # fallback for edge cases
+                outbound = await self.client.get_outbound_bytes_month(s["id"])
             used_tb = outbound / BYTES_IN_TB
             used_gb = outbound / (1024**3)
             pct = used_tb / settings.traffic_limit_tb
