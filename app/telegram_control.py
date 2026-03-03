@@ -23,9 +23,23 @@ class TelegramControl:
             r.raise_for_status()
             return r.json()
 
-    async def send(self, text: str, chat_id: str | None = None):
+    async def send(self, text: str, chat_id: str | None = None, reply_markup: dict | None = None):
         cid = chat_id or self.chat_id
-        return await self.api("sendMessage", {"chat_id": cid, "text": text})
+        payload = {"chat_id": cid, "text": text}
+        if reply_markup:
+            payload["reply_markup"] = reply_markup
+        return await self.api("sendMessage", payload)
+
+    @staticmethod
+    def main_keyboard():
+        return {
+            "keyboard": [
+                [{"text": "📋 服务器列表"}, {"text": "📊 系统状态"}, {"text": "📈 流量汇总"}],
+                [{"text": "🧊 快照列表"}, {"text": "⚙️ qB状态"}, {"text": "❓帮助"}],
+            ],
+            "resize_keyboard": True,
+            "is_persistent": True,
+        }
 
     async def set_menu(self):
         cmds = [
@@ -48,6 +62,15 @@ class TelegramControl:
 
     async def handle(self, text: str, chat_id: str):
         t = (text or "").strip()
+        quick = {
+            "📋 服务器列表": "/list",
+            "📊 系统状态": "/status",
+            "📈 流量汇总": "/report",
+            "🧊 快照列表": "/snapshots",
+            "⚙️ qB状态": "/qbstatus",
+            "❓帮助": "/help",
+        }
+        t = quick.get(t, t)
         parts = t.split()
         cmd = parts[0].lower() if parts else ""
 
@@ -57,8 +80,10 @@ class TelegramControl:
                 "/list 服务器列表\n/status 系统状态\n/traffic <ID> 流量详情\n/today <ID> 今日流量\n/report 流量汇总\n"
                 "/snapshots 快照列表\n/createsnapshot <ID> [confirm] 创建快照\n/createfromsnapshot <snapshot_id> <type> <location> <name>\n"
                 "/startserver <ID> /stopserver <ID> /reboot <ID>\n/delete <ID> confirm /rebuild <ID> [image]\n/resetpwd <ID> 重置并发送新密码\n"
-                "/scheduleon /scheduleoff /schedulestatus (预留)\n/dnscheck /dnstest (预留)",
+                "/scheduleon /scheduleoff /schedulestatus (预留)\n/dnscheck /dnstest (预留)\n\n"
+                "你也可以直接点下方按钮。",
                 chat_id,
+                reply_markup=self.main_keyboard(),
             )
 
         if cmd in ["/list", "/servers"]:
@@ -150,7 +175,7 @@ class TelegramControl:
         if not self.enabled:
             return
         await self.set_menu()
-        await self.send("🤖 Hetzner Monitor 机器人已启动，发送 /start 查看命令")
+        await self.send("🤖 Hetzner Monitor 机器人已启动，发送 /start 查看命令", reply_markup=self.main_keyboard())
         while True:
             try:
                 async with httpx.AsyncClient(timeout=60) as c:
