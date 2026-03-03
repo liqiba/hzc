@@ -61,7 +61,33 @@ function rowHtml(r){
     </td>
   </tr>`
 }
-function copyText(v){navigator.clipboard?.writeText(String(v));toast(`已复制: ${v}`)}
+async function copyText(v){
+  const text=String(v)
+  let ok=false
+  try{
+    if(navigator.clipboard && window.isSecureContext){
+      await navigator.clipboard.writeText(text)
+      ok=true
+    }
+  }catch(e){ ok=false }
+
+  if(!ok){
+    try{
+      const ta=document.createElement('textarea')
+      ta.value=text
+      ta.style.position='fixed'
+      ta.style.opacity='0'
+      ta.style.pointerEvents='none'
+      document.body.appendChild(ta)
+      ta.focus(); ta.select()
+      ok=document.execCommand('copy')
+      document.body.removeChild(ta)
+    }catch(e){ ok=false }
+  }
+
+  if(ok) toast(`已复制: ${text}`)
+  else toast(`复制失败，请手动复制: ${text}`)
+}
 
 function typeFamily(name=''){return name.replace(/[0-9].*$/,'')}
 function monthlyPriceForType(t,loc){if(!t?.prices?.length) return Number.POSITIVE_INFINITY;const ex=t.prices.find(p=>p.location===loc);const p=ex||t.prices[0];return Number(p?.price_monthly?.gross||999999)}
