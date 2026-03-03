@@ -71,9 +71,6 @@ class MonitorService:
         for s in servers:
             # Billing-consistent logic: Hetzner official traffic OUT (external upload only)
             outbound = int(s.get("outgoing_traffic") or 0)
-            if outbound <= 0:
-                # fallback for edge cases
-                outbound = await self.client.get_outbound_bytes_month(s["id"])
             used_tb = outbound / BYTES_IN_TB
             used_gb = outbound / (1024**3)
             pct = used_tb / settings.traffic_limit_tb
