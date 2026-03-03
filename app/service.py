@@ -247,5 +247,10 @@ class MonitorService:
             return {'ok': await self.client.delete_server(server_id)}
         return {'ok': False, 'error': 'unsupported cmd'}
 
+    async def rename_server_manual(self, server_id: int, name: str):
+        data = await self.client.rename_server(server_id, name)
+        await self.tg.send(f"✏️ Server renamed: {server_id} -> {name}")
+        return {"ok": True, "server_id": server_id, "name": name, "raw": data}
+
 
 monitor = MonitorService()

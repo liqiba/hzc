@@ -32,6 +32,10 @@ class RenameSnapshotReq(BaseModel):
     description: str
 
 
+class RenameServerReq(BaseModel):
+    name: str
+
+
 @app.on_event('startup')
 async def startup_event():
     if settings.hetzner_token:
@@ -116,3 +120,10 @@ async def reset_password(server_id: int):
     if not settings.hetzner_token:
         raise HTTPException(status_code=500, detail='HETZNER_TOKEN missing')
     return await monitor.reset_password_and_notify(server_id)
+
+
+@app.patch('/api/server/{server_id}/name')
+async def rename_server(server_id: int, req: RenameServerReq):
+    if not settings.hetzner_token:
+        raise HTTPException(status_code=500, detail='HETZNER_TOKEN missing')
+    return await monitor.rename_server_manual(server_id, req.name)

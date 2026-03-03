@@ -128,3 +128,10 @@ class HetznerClient:
             r = await c.post(f"{BASE}/servers/{server_id}/actions/{action}", headers=self.headers, json=payload or {})
             r.raise_for_status()
             return r.json()
+
+    async def rename_server(self, server_id: int, name: str):
+        payload = {"name": name}
+        async with httpx.AsyncClient(timeout=30) as c:
+            r = await c.put(f"{BASE}/servers/{server_id}", headers=self.headers, json=payload)
+            r.raise_for_status()
+            return r.json()

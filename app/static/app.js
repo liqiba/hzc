@@ -55,6 +55,7 @@ function rowHtml(r){
     <td>${r.used_gb} GB (${r.used_tb} TB)</td><td>${todayCell}</td><td>${r.limit_tb} TB</td>
     <td><div class="progress"><div class="bar ${warn?'warn':''}" style="width:${pct}%"></div></div><div class="ratio-text">${pct.toFixed(1)}%</div></td>
     <td>
+      <button class="btn action" onclick="renameServer(${r.id}, '${(r.name||'').replace(/'/g,"\\'")}')">改名</button>
       <button class="btn btn-danger action" onclick="rotate(${r.id})">重建</button>
       <button class="btn snapshot action" onclick="snapshot(${r.id})">创建快照</button>
     </td>
@@ -109,6 +110,16 @@ async function loadData(showToast=false){
 }
 async function loadDaily(showToast=false){const r=await fetch('/api/daily_stats?days=7');renderDailyStats(await r.json()); if(showToast) toast('统计已刷新')}
 async function loadAll(showToast=false){await Promise.all([loadMeta(false),loadData(false),loadDaily(false)]); if(showToast) toast('全部数据已刷新')}
+
+async function renameServer(id, oldName){
+  const n=prompt('请输入新的服务器名称：', oldName||`server-${id}`)
+  if(!n) return
+  const r=await fetch(`/api/server/${id}/name`,{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({name:n})})
+  const d=await r.json()
+  if(!r.ok||!d?.ok){alert(d?.detail||d?.error||'改名失败');return}
+  toast('服务器名称已更新')
+  loadData(false)
+}
 
 async function rotate(id){if(!confirm('确认重建该服务器？此操作会删除旧机。')) return; const r=await fetch(`/api/rotate/${id}`,{method:'POST'}),d=await r.json(); if(!r.ok){alert(d?.detail||d?.error||'重建失败');return} toast('重建任务已提交'); loadAll(false)}
 async function snapshot(id){
