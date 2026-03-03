@@ -44,6 +44,16 @@ class HetznerClient:
             return raw
         return []
 
+    @staticmethod
+    def _point_date(ts):
+        # ts may be unix epoch seconds (int/str) or iso string
+        if isinstance(ts, (int, float)):
+            return dt.datetime.utcfromtimestamp(int(ts)).strftime("%Y-%m-%d")
+        s = str(ts)
+        if s.isdigit():
+            return dt.datetime.utcfromtimestamp(int(s)).strftime("%Y-%m-%d")
+        return s[:10]
+
     def _pick_outbound_series(self, data: dict):
         ts = data.get("metrics", {}).get("time_series", {})
         # New Hetzner metric names (rate): bandwidth.out (bytes/s)
@@ -77,8 +87,9 @@ class HetznerClient:
         return total
 
     async def get_outbound_daily(self, server_id: int, days: int = 7):
+        # Use hourly step then aggregate by date for better compatibility/data density
         now = dt.datetime.utcnow().replace(microsecond=0)
-        step = 86400
+        step = 3600
         start = (now - dt.timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
         end = now.strftime("%Y-%m-%dT%H:%M:%SZ")
         params = {"type": "network", "start": start, "end": end, "step": str(step)}
@@ -87,7 +98,7 @@ class HetznerClient:
             r.raise_for_status()
             data = r.json()
         series, mode = self._pick_outbound_series(data)
-        out = []
+        agg = {}
         for p in series:
             if len(p) > 1 and p[1] is not None:
                 try:
@@ -95,8 +106,9 @@ class HetznerClient:
                 except (TypeError, ValueError):
                     continue
                 b = int(v * step) if mode == "bandwidth" else int(v)
-                out.append({"date": str(p[0])[:10], "bytes": b})
-        return out
+                d = self._point_date(p[0])
+                agg[d] = agg.get(d, 0) + b
+        return [{"date": d, "bytes": agg[d]} for d in sorted(agg.keys())]
 
     async def create_snapshot(self, server_id: int, description: str):
         payload = {"type": "snapshot", "description": description}
