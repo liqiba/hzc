@@ -116,6 +116,13 @@ class HetznerClient:
             r.raise_for_status()
             return True
 
+    async def update_snapshot_description(self, image_id: int, description: str):
+        payload = {"description": description}
+        async with httpx.AsyncClient(timeout=30) as c:
+            r = await c.put(f"{BASE}/images/{image_id}", headers=self.headers, json=payload)
+            r.raise_for_status()
+            return r.json()
+
     async def server_action(self, server_id: int, action: str, payload: dict | None = None):
         async with httpx.AsyncClient(timeout=30) as c:
             r = await c.post(f"{BASE}/servers/{server_id}/actions/{action}", headers=self.headers, json=payload or {})

@@ -24,6 +24,14 @@ class CreateServerReq(BaseModel):
     image: str | int
 
 
+class SnapshotReq(BaseModel):
+    description: str | None = None
+
+
+class RenameSnapshotReq(BaseModel):
+    description: str
+
+
 @app.on_event('startup')
 async def startup_event():
     if settings.hetzner_token:
@@ -75,10 +83,11 @@ async def snapshot_estimate(server_id: int):
 
 
 @app.post('/api/snapshot/{server_id}')
-async def snapshot(server_id: int):
+async def snapshot(server_id: int, req: SnapshotReq | None = None):
     if not settings.hetzner_token:
         raise HTTPException(status_code=500, detail='HETZNER_TOKEN missing')
-    return await monitor.create_snapshot_manual(server_id)
+    desc = req.description if req else None
+    return await monitor.create_snapshot_manual(server_id, description=desc)
 
 
 @app.post('/api/create_server')
@@ -93,6 +102,13 @@ async def delete_snapshot(image_id: int):
     if not settings.hetzner_token:
         raise HTTPException(status_code=500, detail='HETZNER_TOKEN missing')
     return await monitor.delete_snapshot_manual(image_id)
+
+
+@app.patch('/api/snapshot/{image_id}')
+async def rename_snapshot(image_id: int, req: RenameSnapshotReq):
+    if not settings.hetzner_token:
+        raise HTTPException(status_code=500, detail='HETZNER_TOKEN missing')
+    return await monitor.rename_snapshot_manual(image_id, req.description)
 
 
 @app.post('/api/reset_password/{server_id}')

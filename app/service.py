@@ -69,6 +69,8 @@ class MonitorService:
                 "status": s["status"],
                 "ip": s.get("public_net", {}).get("ipv4", {}).get("ip", ""),
                 "server_type": s.get("server_type", {}).get("name", ""),
+                "cores": s.get("server_type", {}).get("cores", 0),
+                "memory_gb": s.get("server_type", {}).get("memory", 0),
                 "disk_gb": s.get("server_type", {}).get("disk", 0),
                 "used_tb": round(used_tb, 3),
                 "used_gb": round(used_gb, 2),
@@ -154,7 +156,7 @@ class MonitorService:
             description = f"manual-snap-{server_id}-{dt.datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
         res = await self.client.create_snapshot(server_id, description)
         await self.tg.send(f"📸 Snapshot started for server {server_id}: {description}")
-        return {"ok": True, "message": "snapshot job started", "action": res.get("action", {})}
+        return {"ok": True, "message": "snapshot job started", "action": res.get("action", {}), "description": description}
 
     @staticmethod
     def _extract_password(payload: dict):
@@ -203,6 +205,11 @@ class MonitorService:
         await self.client.delete_snapshot(image_id)
         await self.tg.send(f"🗑️ Snapshot deleted: {image_id}")
         return {"ok": True, "deleted": image_id}
+
+    async def rename_snapshot_manual(self, image_id: int, description: str):
+        data = await self.client.update_snapshot_description(image_id, description)
+        await self.tg.send(f"✏️ Snapshot renamed: {image_id} -> {description}")
+        return {"ok": True, "updated": image_id, "description": description, "raw": data}
 
 
     async def server_list_text(self):

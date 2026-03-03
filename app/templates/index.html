@@ -7,41 +7,51 @@
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body data-theme="dark">
-  <header class="topbar">
+  <div class="bg-blur"></div>
+
+  <header class="topbar glass">
     <div>
       <h1>Hetzner Traffic Guard</h1>
-      <p class="sub">服务器流量监控 · 安全模式优先</p>
+      <p class="sub">流量监控 · 快照管理 · 服务器运维</p>
     </div>
     <div class="actions">
-      <button id="themeBtn" onclick="toggleTheme()">☀️ 浅色</button>
-      <input id="kw" placeholder="搜索服务器名/IP" />
-      <button onclick="openCreateModal()">+ 创建服务器</button>
-      <button onclick="openSnapshotsModal()">快照管理</button>
-      <button onclick="loadData()">刷新</button>
+      <input id="kw" placeholder="搜索名称 / IP / ID" />
+      <button class="btn" onclick="loadAll(true)">刷新</button>
+      <button class="btn" onclick="openCreateModal()">+ 创建服务器</button>
+      <button class="btn" onclick="openSnapshotsModal()">快照管理</button>
+      <button class="btn ghost" id="themeBtn" onclick="toggleTheme()">☀️ 浅色</button>
     </div>
   </header>
 
   <section class="cards" id="cards"></section>
 
-  <section class="panel">
-    <div class="panel-title">每日流量统计（最近7天）</div>
+  <section class="panel glass">
+    <div class="panel-head">
+      <div class="panel-title">每日流量统计（最近7天）</div>
+      <button class="btn ghost small" onclick="loadDaily(true)">刷新统计</button>
+    </div>
     <div id="dailyStats" class="daily-stats">加载中...</div>
   </section>
 
-  <section class="panel" style="margin-top:12px">
-    <div class="panel-title">服务器列表</div>
-    <table id="tb">
-      <thead>
-      <tr>
-        <th>ID</th><th>名称</th><th>IP</th><th>状态</th><th>已用流量</th><th>24h流量</th><th>限额</th><th>占比</th><th>操作</th>
-      </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
+  <section class="panel glass" style="margin-top:12px">
+    <div class="panel-head">
+      <div class="panel-title">服务器列表</div>
+      <div class="hint">支持手动重建、创建快照、复制ID</div>
+    </div>
+    <div class="table-wrap">
+      <table id="tb">
+        <thead>
+        <tr>
+          <th>ID</th><th>名称</th><th>配置/型号</th><th>IP</th><th>状态</th><th>已用流量</th><th>24h流量</th><th>限额</th><th>占比</th><th>操作</th>
+        </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
   </section>
 
   <div id="createModal" class="modal hidden">
-    <div class="modal-card">
+    <div class="modal-card glass">
       <h3>创建新服务器</h3>
       <div class="grid">
         <label>名称<input id="c_name" placeholder="my-server" /></label>
@@ -53,27 +63,32 @@
         <label>镜像/快照<select id="c_image"></select><small id="costEst"></small></label>
       </div>
       <div class="modal-actions" style="margin-top:8px">
-        <button class="ghost" onclick="preset('basic')">入门推荐</button>
-        <button class="ghost" onclick="preset('balanced')">均衡推荐</button>
-        <button class="ghost" onclick="preset('pro')">高配推荐</button>
-        <button class="ghost" onclick="refreshInventory()">刷新库存</button>
+        <button class="btn ghost" onclick="preset('basic')">入门推荐</button>
+        <button class="btn ghost" onclick="preset('balanced')">均衡推荐</button>
+        <button class="btn ghost" onclick="preset('pro')">高配推荐</button>
+        <button class="btn ghost" onclick="refreshInventory()">刷新库存</button>
       </div>
       <div class="modal-actions">
-        <button onclick="submitCreate()">创建</button>
-        <button class="ghost" onclick="closeCreateModal()">取消</button>
+        <button class="btn primary" onclick="submitCreate()">创建</button>
+        <button class="btn" onclick="closeCreateModal()">取消</button>
       </div>
     </div>
   </div>
 
   <div id="snapshotsModal" class="modal hidden">
-    <div class="modal-card">
-      <h3>快照管理</h3>
+    <div class="modal-card glass">
+      <div class="panel-head">
+        <h3>快照管理</h3>
+        <button class="btn ghost small" onclick="loadSnapshotsList(true)">刷新</button>
+      </div>
       <div id="snapshotsList">加载中...</div>
       <div class="modal-actions">
-        <button class="ghost" onclick="closeSnapshotsModal()">关闭</button>
+        <button class="btn" onclick="closeSnapshotsModal()">关闭</button>
       </div>
     </div>
   </div>
+
+  <div id="toast" class="toast hidden"></div>
 
   <script src="/static/app.js"></script>
 </body>
