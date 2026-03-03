@@ -105,7 +105,7 @@ function rowHtml(r){
     <td>
       <button class="btn action" onclick="openQBModal(${r.id})">配置qB</button>
       <button class="btn action" onclick="renameServer(${r.id}, '${(r.name||'').replace(/'/g,"\\'")}')">改名</button>
-      <button class="btn btn-danger action" onclick="rotate(${r.id})">重建</button>
+      <button class="btn btn-danger action" onclick="openRebuildModal(${r.id})">重建</button>
       <button class="btn snapshot action" onclick="snapshot(${r.id})">创建快照</button>
     </td>
   </tr>`
@@ -207,7 +207,30 @@ async function renameServer(id, oldName){
   loadData(false)
 }
 
-async function rotate(id){if(!confirm('确认重建该服务器？此操作会删除旧机。')) return; const r=await fetch(`/api/rotate/${id}`,{method:'POST'}),d=await r.json(); if(!r.ok){alert(d?.detail||d?.error||'重建失败');return} toast('重建任务已提交'); loadAll(false)}
+function openRebuildModal(serverId){
+  byId('rebuildModal').classList.remove('hidden')
+  byId('rebuild_server_id').value=serverId
+  const snaps=(META.snapshots||[])
+  byId('rebuild_snapshot').innerHTML = snaps.length
+    ? snaps.map(s=>`<option value="${s.id}">#${s.id} ${s.name||''} (${s.size_gb||0}GB)</option>`).join('')
+    : '<option value="">暂无可用快照</option>'
+}
+function closeRebuildModal(){ byId('rebuildModal').classList.add('hidden') }
+
+async function submitRebuild(){
+  const sid=Number(byId('rebuild_server_id').value)
+  const imageId=Number(byId('rebuild_snapshot').value)
+  if(!imageId){alert('请先选择已有快照');return}
+  if(!confirm(`二次确认：将使用快照 #${imageId} 原地重建服务器 ${sid}（保留IP），继续吗？`)) return
+  const verify = prompt('请输入 REBUILD 确认执行：','')
+  if((verify||'').trim().toUpperCase() !== 'REBUILD'){ alert('未确认，已取消'); return }
+  const r=await fetch(`/api/rebuild/${sid}`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({image_id:imageId})})
+  const d=await r.json()
+  if(!r.ok||!d?.ok){alert(d?.detail||d?.error||'重建失败');return}
+  toast('重建任务已提交（原地重建，保留IP）')
+  closeRebuildModal(); loadAll(false)
+}
+
 async function snapshot(id){
   const e=await fetch(`/api/snapshot_estimate/${id}`),est=await e.json();
   if(!e.ok||!est?.ok){alert('无法获取快照费用预估');return}

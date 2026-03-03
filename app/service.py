@@ -277,6 +277,12 @@ class MonitorService:
             return {'ok': await self.client.delete_server(server_id)}
         return {'ok': False, 'error': 'unsupported cmd'}
 
+    async def rebuild_with_snapshot_manual(self, server_id: int, image_id: int):
+        # Rebuild in-place: keep same server object (and public IP), do NOT auto-create new snapshot
+        res = await self.client.server_action(server_id, 'rebuild', {'image': int(image_id)})
+        await self.tg.send(f"♻️ 重建已提交\n服务器ID: {server_id}\n快照ID: {image_id}\n说明: 原地重建，保留原服务器IP")
+        return {"ok": True, "server_id": server_id, "image_id": int(image_id), "action": res.get("action", res)}
+
     async def rename_server_manual(self, server_id: int, name: str):
         data = await self.client.rename_server(server_id, name)
         await self.tg.send(f"✏️ Server renamed: {server_id} -> {name}")

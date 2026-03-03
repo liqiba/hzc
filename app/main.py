@@ -43,6 +43,10 @@ class QBNodeReq(BaseModel):
     password: str
 
 
+class RebuildReq(BaseModel):
+    image_id: int
+
+
 @app.on_event('startup')
 async def startup_event():
     if settings.hetzner_token:
@@ -104,6 +108,13 @@ async def rotate(server_id: int):
     if not settings.hetzner_token:
         raise HTTPException(status_code=500, detail='HETZNER_TOKEN missing')
     return await monitor.rotate_server(server_id)
+
+
+@app.post('/api/rebuild/{server_id}')
+async def rebuild(server_id: int, req: RebuildReq):
+    if not settings.hetzner_token:
+        raise HTTPException(status_code=500, detail='HETZNER_TOKEN missing')
+    return await monitor.rebuild_with_snapshot_manual(server_id, req.image_id)
 
 
 @app.get('/api/snapshot_estimate/{server_id}')

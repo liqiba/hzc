@@ -79,7 +79,7 @@ class TelegramControl:
                 "命令:\n"
                 "/list 服务器列表\n/status 系统状态\n/traffic <ID> 流量详情\n/today <ID> 今日流量\n/report 流量汇总\n"
                 "/snapshots 快照列表\n/createsnapshot <ID> [confirm] 创建快照\n/createfromsnapshot <snapshot_id> <type> <location> <name>\n"
-                "/startserver <ID> /stopserver <ID> /reboot <ID>\n/delete <ID> confirm /rebuild <ID> [image]\n/resetpwd <ID> 重置并发送新密码\n"
+                "/startserver <ID> /stopserver <ID> /reboot <ID>\n/delete <ID> confirm /rebuild <ID> <snapshot_id>\n/resetpwd <ID> 重置并发送新密码\n"
                 "/scheduleon /scheduleoff /schedulestatus (预留)\n/dnscheck /dnstest (预留)\n\n"
                 "你也可以直接点下方按钮。",
                 chat_id,
@@ -167,8 +167,12 @@ class TelegramControl:
             }[cmd]
             if map_cmd == "delete" and (len(parts) < 3 or parts[2] != "confirm"):
                 return await self.send(f"危险操作确认: /delete {sid} confirm", chat_id)
-            extra = parts[2] if map_cmd == "rebuild" and len(parts) >= 3 else None
-            res = await self.monitor.op_server(map_cmd, sid, extra)
+            if map_cmd == "rebuild":
+                if len(parts) < 3:
+                    return await self.send(f"请指定已有快照ID：/rebuild {sid} <snapshot_id>", chat_id)
+                res = await self.monitor.rebuild_with_snapshot_manual(sid, int(parts[2]))
+                return await self.send(f"操作已提交: rebuild {sid} snapshot#{parts[2]}\n{str(res)[:800]}", chat_id)
+            res = await self.monitor.op_server(map_cmd, sid)
             return await self.send(f"操作已提交: {map_cmd} {sid}\n{str(res)[:800]}", chat_id)
 
         if cmd in ["/scheduleon", "/scheduleoff", "/schedulestatus", "/dnstest", "/dnscheck"]:
