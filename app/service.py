@@ -6,8 +6,8 @@ from app.telegram_bot import Tg
 from app.qb_client import QBClient
 from app.qb_store import QBStore
 
-# Hetzner traffic quota is decimal TB (10^12 bytes)
-BYTES_IN_TB = 10**12
+# Keep same unit behavior as Hetzner panel (binary TiB, though UI labels TB)
+BYTES_IN_TB = 1024**4
 
 
 class MonitorService:
@@ -73,7 +73,8 @@ class MonitorService:
             outbound = int(s.get("outgoing_traffic") or 0)
             used_tb = outbound / BYTES_IN_TB
             used_gb = outbound / (1024**3)
-            pct = used_tb / settings.traffic_limit_tb
+            included_tb = (int(s.get("included_traffic") or 0) / BYTES_IN_TB) or settings.traffic_limit_tb
+            pct = used_tb / included_tb if included_tb > 0 else 0
             try:
                 daily = await self.client.get_outbound_daily(s["id"], days=2)
             except Exception:
@@ -103,7 +104,7 @@ class MonitorService:
                 "today_gb": round(today_gb, 4),
                 "used_bytes": int(outbound),
                 "today_bytes": int(daily[-1].get("bytes", 0) if daily else 0),
-                "limit_tb": settings.traffic_limit_tb,
+                "limit_tb": round(included_tb, 4),
                 "ratio": round(pct, 4),
                 "over_threshold": pct >= settings.rotate_threshold,
                 "qb": qbs,
