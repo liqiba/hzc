@@ -59,8 +59,8 @@ function formatIECps(bytesPerSec){
   return `${formatIEC(bytesPerSec)}/s`
 }
 
-function formatTB10(bytes){
-  return `${(Number(bytes||0)/1e12).toFixed(4)} TB`
+function formatTB2(bytes){
+  return `${(Number(bytes||0)/1024/1024/1024/1024).toFixed(4)} TB`
 }
 
 function rowHtml(r){
@@ -70,7 +70,7 @@ function rowHtml(r){
   const avg=gb.length?gb.reduce((a,b)=>a+b,0)/gb.length:0
   const today=Number(r.today_gb||0)
   const anomaly=avg>0 && today>=avg*2 ? 'crit' : (avg>0 && today>=avg*1.5 ? 'warn' : '')
-  const todayCell=`${formatIEC(r.today_bytes)} (${formatTB10(r.today_bytes)}) ${anomaly?`<span class='badge-traffic ${anomaly==='crit'?'badge-crit':'badge-warn'}'>${anomaly==='crit'?'异常':'偏高'}</span>`:''}`
+  const todayCell=`${formatIEC(r.today_bytes)} (${formatTB2(r.today_bytes)}) ${anomaly?`<span class='badge-traffic ${anomaly==='crit'?'badge-crit':'badge-warn'}'>${anomaly==='crit'?'异常':'偏高'}</span>`:''}`
 
   const q=r.qb||{}
   const qbCell = q.enabled
@@ -93,7 +93,7 @@ function rowHtml(r){
     <td>${r.ip||''}</td>
     <td><span class="badge ${r.status==='running'?'running':'other'}">${r.status}</span></td>
     <td>${qbCell}</td>
-    <td>${formatIEC(r.used_bytes)} (${formatTB10(r.used_bytes)})</td><td>${todayCell}</td><td>${r.limit_tb} TB</td>
+    <td>${formatIEC(r.used_bytes)} (${(Number(r.used_tb||0)).toFixed(4)} TB)</td><td>${todayCell}</td><td>${r.limit_tb} TB</td>
     <td><div class="progress"><div class="bar ${warn?'warn':''}" style="width:${pct}%"></div></div><div class="ratio-text">${pct.toFixed(1)}%</div></td>
     <td>
       <button class="btn action" onclick="openQBModal(${r.id})">配置qB</button>
