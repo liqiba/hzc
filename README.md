@@ -1,25 +1,14 @@
-# HZC - Hetzner Traffic Guard
+# HZC - Hetzner 流量保护
 
 一个给 Hetzner 用户做“流量可视化 + 安全自动化”的小白友好项目。  
 目标：**开箱即用、默认安全、出问题可定位**。
 
 ---
 
-## 1) 项目公开状态（你刚提的第1点）
 
-我已尝试通过 API 直接把仓库改成 Public，但当前凭据权限不足（返回 403）。
 
-你在 GitHub 点两下就能完成：
 
-1. 打开仓库：`https://github.com/liqiba/hzc`
-2. `Settings` → `General` → 拉到最底部 `Danger Zone`
-3. `Change repository visibility` → `Make public`
-
-> 完成后，任何人都可以 `git clone` 拉取安装。
-
----
-
-## 2) 小白 10 分钟上手（推荐）
+## 1) 小白 10 分钟上手（推荐）
 
 > 只需要：一台 Linux 服务器 + Docker + Hetzner API Token
 
@@ -33,7 +22,7 @@ cd hzc
 ### 第二步：一键安装向导
 
 ```bash
-bash scripts/onekey.sh
+bash 脚本/onekey.sh
 ```
 
 你只需要先填一个必填项：
@@ -43,11 +32,12 @@ bash scripts/onekey.sh
 
 ### 第三步：打开面板
 
-```text
+```文本
 http://你的服务器IP:1227
 ```
 
 ---
+
 
 ## 3) 默认安全逻辑（已简化）
 
@@ -59,9 +49,10 @@ http://你的服务器IP:1227
 
 这意味着：
 - 新手可以先观察，不会误删
-- 看明白后再关闭 SAFE_MODE 开自动化
+- 看明白后再关闭 安全模式 开自动化
 
 ---
+
 
 ## 4) 功能清单（当前可用）
 
