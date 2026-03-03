@@ -7,3 +7,5 @@ services:
       - "1227:1227"
     env_file:
       - .env
+    volumes:
+      - ./state:/app/state
