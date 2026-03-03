@@ -33,14 +33,25 @@ class HetznerClient:
             r.raise_for_status()
             return r.json().get("images", [])
 
+    @staticmethod
+    def _normalize_series(raw):
+        # New format: {"values": [[ts,val], ...]}
+        if isinstance(raw, dict):
+            vals = raw.get("values", [])
+            return vals if isinstance(vals, list) else []
+        # Old format: [[ts,val], ...]
+        if isinstance(raw, list):
+            return raw
+        return []
+
     def _pick_outbound_series(self, data: dict):
         ts = data.get("metrics", {}).get("time_series", {})
         # New Hetzner metric names (rate): bandwidth.out (bytes/s)
         if "network.0.bandwidth.out" in ts:
-            return ts.get("network.0.bandwidth.out", []), "bandwidth"
+            return self._normalize_series(ts.get("network.0.bandwidth.out", [])), "bandwidth"
         # Backward compatibility
         if "network.0.tx" in ts:
-            return ts.get("network.0.tx", []), "tx"
+            return self._normalize_series(ts.get("network.0.tx", [])), "tx"
         return [], "unknown"
 
     async def get_outbound_bytes_month(self, server_id: int) -> int:
