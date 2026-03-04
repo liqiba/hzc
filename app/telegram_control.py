@@ -142,14 +142,19 @@ class TelegramControl:
 
         if cmd == "/upgrade":
             await self.send("开始执行一键升级（拉取最新代码并重建容器）...", chat_id)
-            # fire-and-forget: container may restart during this process
-            upgrade_cmd = "nohup bash -lc 'cd /opt/hzc && ./scripts/upgrade.sh' >/tmp/hzc-upgrade.log 2>&1 &"
+            # run upgrade in a dedicated helper container to avoid self-termination
+            upgrade_cmd = (
+                "bash -lc 'docker run -d --name hzc-upgrader-$(date +%s) --rm "
+                "-v /opt/hzc:/opt/hzc -v /var/run/docker.sock:/var/run/docker.sock "
+                "hzc_hetzner-traffic-guard:latest "
+                "bash -lc \"cd /opt/hzc && ./scripts/upgrade.sh > /opt/hzc/state/upgrade.log 2>&1\"'"
+            )
             p = await asyncio.create_subprocess_shell(upgrade_cmd)
             await p.communicate()
             return await self.send("升级任务已触发。约30-90秒后生效。\n可点【🏷️ 版本号】确认。", chat_id)
 
         if cmd == "/upgradelog":
-            p = await asyncio.create_subprocess_shell("bash -lc 'tail -n 60 /tmp/hzc-upgrade.log 2>/dev/null || echo no-log'", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+            p = await asyncio.create_subprocess_shell("bash -lc 'tail -n 80 /opt/hzc/state/upgrade.log 2>/dev/null || echo no-log'", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
             out, _ = await p.communicate()
             txt = (out.decode("utf-8", errors="ignore") or "no-log").strip()
             ok = "[ok] 升级完成" in txt
