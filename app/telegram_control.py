@@ -1,6 +1,7 @@
 import asyncio
 import httpx
 from app.config import settings
+from app.runtime_config import RuntimeConfig
 
 BASE = "https://api.telegram.org"
 
@@ -8,13 +9,36 @@ BASE = "https://api.telegram.org"
 class TelegramControl:
     def __init__(self, monitor):
         self.monitor = monitor
-        self.token = settings.telegram_bot_token
-        self.chat_id = str(settings.telegram_chat_id or "")
+        self.runtime = RuntimeConfig(settings.runtime_config_path)
+        rc = self.runtime.get()
+        self.token = str(rc.get("telegram_bot_token") or settings.telegram_bot_token or "")
+        self.chat_id = str(rc.get("telegram_chat_id") or settings.telegram_chat_id or "")
         self.offset = 0
 
     @property
     def enabled(self):
         return bool(self.token and self.chat_id)
+
+    def get_telegram_config(self):
+        token = self.token or ""
+        masked = (token[:6] + "..." + token[-4:]) if len(token) > 12 else ("***" if token else "")
+        return {
+            "enabled": self.enabled,
+            "telegram_bot_token_masked": masked,
+            "telegram_chat_id": self.chat_id or "",
+            "source": "runtime_config_or_env",
+        }
+
+    def set_telegram_config(self, telegram_bot_token: str, telegram_chat_id: str):
+        telegram_bot_token = (telegram_bot_token or "").strip()
+        telegram_chat_id = str(telegram_chat_id or "").strip()
+        self.runtime.update({
+            "telegram_bot_token": telegram_bot_token,
+            "telegram_chat_id": telegram_chat_id,
+        })
+        self.token = telegram_bot_token
+        self.chat_id = telegram_chat_id
+        return {"ok": True, "enabled": self.enabled, "need_restart": True}
 
     async def api(self, method: str, payload: dict | None = None):
         url = f"{BASE}/bot{self.token}/{method}"

@@ -19,6 +19,7 @@
       <button class="btn" onclick="loadAll(true)">刷新</button>
       <button class="btn" onclick="openCreateModal()">+ 创建服务器</button>
       <button class="btn" onclick="openSnapshotsModal()">快照管理</button>
+      <button class="btn" onclick="openTGModal()">TG配置</button>
       <button class="btn ghost" id="themeBtn" onclick="toggleTheme()">☀️ 浅色</button>
     </div>
   </header>
@@ -116,6 +117,21 @@
       <div class="modal-actions">
         <button class="btn btn-danger" onclick="submitRebuild()">确认重建</button>
         <button class="btn" onclick="closeRebuildModal()">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="tgModal" class="modal hidden">
+    <div class="modal-card glass">
+      <h3>Telegram 配置</h3>
+      <div class="grid">
+        <label>Bot Token<input id="tg_token" type="password" placeholder="123456:ABC..." /></label>
+        <label>Chat ID<input id="tg_chat" placeholder="例如 1036463619" /></label>
+      </div>
+      <div class="hint" style="margin-top:8px">保存后将写入本地配置文件（/app/state/runtime_config.json）。建议重启服务后生效。</div>
+      <div class="modal-actions">
+        <button class="btn primary" onclick="saveTGConfig()">保存</button>
+        <button class="btn" onclick="closeTGModal()">关闭</button>
       </div>
     </div>
   </div>

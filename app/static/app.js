@@ -283,6 +283,27 @@ async function snapshot(id){
 function openCreateModal(){byId('createModal').classList.remove('hidden')}
 function closeCreateModal(){byId('createModal').classList.add('hidden')}
 async function refreshInventory(){await loadMeta(true)}
+
+async function openTGModal(){
+  byId('tgModal').classList.remove('hidden')
+  try{
+    const r=await fetch('/api/config/telegram')
+    const d=await r.json()
+    byId('tg_chat').value=d.telegram_chat_id||''
+    byId('tg_token').value=''
+  }catch(e){}
+}
+function closeTGModal(){ byId('tgModal').classList.add('hidden') }
+
+async function saveTGConfig(){
+  const body={telegram_bot_token:byId('tg_token').value.trim(), telegram_chat_id:byId('tg_chat').value.trim()}
+  if(!body.telegram_bot_token || !body.telegram_chat_id){ alert('请填写 Bot Token 和 Chat ID'); return }
+  const r=await fetch('/api/config/telegram',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify(body)})
+  const d=await r.json()
+  if(!r.ok||!d?.ok){ alert(d?.detail||d?.error||'保存失败'); return }
+  toast('TG配置已保存，建议执行一次重启服务')
+  closeTGModal()
+}
 async function submitCreate(){const body={name:byId('c_name').value||`srv-${Date.now()}`,server_type:byId('c_type').value,location:byId('c_location').value,image:byId('c_image').value};const r=await fetch('/api/create_server',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}),d=await r.json();if(!r.ok){alert(d?.detail||d?.error||'创建失败');return}toast('创建任务已提交');closeCreateModal();loadData()}
 
 function openSnapshotsModal(){byId('snapshotsModal').classList.remove('hidden');loadSnapshotsList()}

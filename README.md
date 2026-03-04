@@ -137,7 +137,7 @@ docker compose up -d --build
 - `ROTATE_THRESHOLD`：触发阈值（默认0.98）
 - `CHECK_INTERVAL_MINUTES`：检测间隔（默认5）
 - `SAFE_MODE`：默认 true（只告警）
-- `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID`：可选
+- `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID`：可选（推荐在 Web 的“TG配置”里填写，更适合小白）
 
 qB（全局默认，可不填）：
 - `QB_URL`

@@ -47,6 +47,11 @@ class RebuildReq(BaseModel):
     image_id: int
 
 
+class TelegramConfigReq(BaseModel):
+    telegram_bot_token: str
+    telegram_chat_id: str
+
+
 @app.on_event('startup')
 async def startup_event():
     if settings.hetzner_token:
@@ -101,6 +106,16 @@ async def qb_node_set(req: QBNodeReq):
 @app.delete('/api/qb_node/{server_id}')
 async def qb_node_delete(server_id: int):
     return monitor.qb_node_delete(server_id)
+
+
+@app.get('/api/config/telegram')
+async def telegram_config_get():
+    return tg_control.get_telegram_config()
+
+
+@app.put('/api/config/telegram')
+async def telegram_config_set(req: TelegramConfigReq):
+    return tg_control.set_telegram_config(req.telegram_bot_token, req.telegram_chat_id)
 
 
 @app.post('/api/rotate/{server_id}')
