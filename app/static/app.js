@@ -44,7 +44,7 @@ function renderDailyStats(items){
       const tip=`${md}: ${v.toFixed(2)} GB`
       return `<i class='${cls}' style='height:${h}px' data-tip='${tip.replace(/'/g,"&#39;")}'></i>`
     }).join('')
-    const badge=level==='ok'?'':`<span class='badge-traffic ${level==='crit'?'badge-crit':'badge-warn'}'>${level==='crit'?'异常峰值':'高于均值'}</span>`
+    const badge=level==='ok'?'':`<span class='badge-traffic ${level==='crit'?'badge-crit':'badge-warn'}'>${level==='crit'?'流量较高':'流量偏高'}</span>`
     return `<div class="daily-item"><b>${s.name}</b>${badge}<div class="spark">${bars||'<span class="daily-mini">无最近数据</span>'}</div></div>`
   }).join('')
 }
@@ -90,7 +90,7 @@ function rowHtml(r){
   const pct=Math.min(100,(r.ratio||0)*100),warn=r.over_threshold
   const todayPct = ((Number(r.today_bytes||0) / (Number(r.limit_tb||20)*1024*1024*1024*1024)) * 100)
   const anomaly=todayPct>=8 ? 'crit' : (todayPct>=3 ? 'warn' : '')
-  const todayCell=`${formatIEC(r.today_bytes)} ${anomaly?`<span class='badge-traffic ${anomaly==='crit'?'badge-crit':'badge-warn'}'>${anomaly==='crit'?'异常':'偏高'}</span>`:''}`
+  const todayCell=`${formatIEC(r.today_bytes)} ${anomaly?`<span class='badge-traffic ${anomaly==='crit'?'badge-crit':'badge-warn'}'>${anomaly==='crit'?'流量较高':'流量偏高'}</span>`:''}`
 
   const q=r.qb||{}
   const p=r.auto_policy||{}
@@ -99,7 +99,7 @@ function rowHtml(r){
   const policyBtnClass = policyOn ? 'btn action policy-on' : 'btn action policy-off'
   const usedPct = Math.min(100, ((Number(r.used_tb||0) / Number(r.limit_tb||20)) * 100))
   const hue = Math.max(0, 220 - Math.round(usedPct*2.2))
-  const usedCell = `<div class="ratio-text">${usedPct.toFixed(1)}%</div><div class="progress progress-mini" title="${usedPct.toFixed(1)}%"><div class="bar" style="width:${usedPct}%;background:hsl(${hue} 85% 50%)"></div></div><div class="daily-mini">${formatTBPrecise(r.used_tb)}</div>`
+  const usedCell = `<div class="ratio-text">${usedPct.toFixed(1)}%</div><div class="progress progress-mini" title="${usedPct.toFixed(1)}%"><div class="bar" style="width:${usedPct}%;background:hsl(${hue} 85% 50%)"></div></div><div class="daily-mini">${formatTBPrecise(r.used_tb)} / ${formatTBPrecise(r.limit_tb)}</div>`
   const qbCell = q.enabled
     ? `<div class='qb-line'>
          <span class='qb-col'>↑ ${formatIECps(q.up_speed)}</span>
