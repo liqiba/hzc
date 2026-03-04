@@ -243,11 +243,28 @@ class MonitorService:
         return {"ok": True, "updated": image_id, "description": description, "raw": data}
 
 
+    @staticmethod
+    def _mini_bar(pct: float, width: int = 10):
+        pct = max(0.0, min(100.0, pct))
+        fill = int(round(pct / 100 * width))
+        return "🟩" * fill + "⬜" * (width - fill)
+
     async def server_list_text(self):
         rows = await self.collect()
         if not rows:
             return "暂无服务器"
-        return "\n".join([f"{r['id']} | {r['name']} | {r['status']} | {r['ip']} | {round(r['ratio']*100,2)}%" for r in rows])
+        lines = ["🖥️ 服务器列表"]
+        for r in rows:
+            pct = round((r.get('ratio', 0) or 0) * 100, 2)
+            bar = self._mini_bar(pct)
+            state = "🟢运行" if r.get('status') == 'running' else f"🟠{r.get('status')}"
+            lines.append(
+                f"\n<b>{r.get('name')}</b>  <code>{r.get('id')}</code>\n"
+                f"{state} · 🌐 {r.get('ip','-')}\n"
+                f"📤 {r.get('used_tb',0):.4f}/{r.get('limit_tb',20):.0f} TB ({pct}%)\n"
+                f"{bar}"
+            )
+        return "\n".join(lines)
 
     async def traffic_text(self, server_id: int):
         rows = await self.collect()

@@ -49,7 +49,7 @@ class TelegramControl:
 
     async def send(self, text: str, chat_id: str | None = None, reply_markup: dict | None = None):
         cid = chat_id or self.chat_id
-        payload = {"chat_id": cid, "text": text}
+        payload = {"chat_id": cid, "text": text, "parse_mode": "HTML", "disable_web_page_preview": True}
         if reply_markup:
             payload["reply_markup"] = reply_markup
         return await self.api("sendMessage", payload)
@@ -150,15 +150,25 @@ class TelegramControl:
                 return f"{v/1024/1024:.2f} MiB/s"
             def _fmt_total(v):
                 return f"{v/1024/1024/1024/1024:.2f} TiB"
+            def _task_bar(a, t):
+                t = max(1, int(t or 0))
+                a = max(0, min(int(a or 0), t))
+                w = 8
+                fill = int(round(a / t * w))
+                return "🟦" * fill + "⬜" * (w - fill)
 
-            lines = ["qB状态（全部节点）"]
+            lines = ["⚙️ <b>qB状态（全部节点）</b>"]
             for r in qrows:
                 q = r.get("qb", {})
+                conn = q.get('connection_status','unknown')
+                conn_icon = "🟢" if conn == 'connected' else "🟠"
+                a = q.get('active_torrents',0)
+                t = q.get('all_torrents',0)
                 lines.append(
-                    f"\n[{r.get('name')}|{r.get('id')}] {q.get('connection_status','unknown')}"
-                    f"\n实时: ↑ {_fmt_speed(q.get('up_speed',0))} / ↓ {_fmt_speed(q.get('dl_speed',0))}"
-                    f"\n累计: ↑ {_fmt_total(q.get('up_total',0))} / ↓ {_fmt_total(q.get('dl_total',0))}"
-                    f"\n任务: {q.get('active_torrents',0)}/{q.get('all_torrents',0)}  DHT:{q.get('dht_nodes',0)}"
+                    f"\n<b>{r.get('name')}</b> <code>{r.get('id')}</code> {conn_icon}{conn}"
+                    f"\n⬆️ {_fmt_speed(q.get('up_speed',0))} · ⬇️ {_fmt_speed(q.get('dl_speed',0))}"
+                    f"\n📦 ⬆️ {_fmt_total(q.get('up_total',0))} · ⬇️ {_fmt_total(q.get('dl_total',0))}"
+                    f"\n🧩 任务 {a}/{t}  {_task_bar(a,t)}  · DHT {q.get('dht_nodes',0)}"
                 )
             return await self.send("\n".join(lines)[:3800], chat_id)
 
