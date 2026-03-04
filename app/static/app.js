@@ -4,6 +4,7 @@ let CURRENT_SERVERS=[]
 let DAILY_MAP={}
 let QB_NODES={}
 let AUTO_POLICIES={}
+let __rowHtmlCache={}
 
 const toast=(msg)=>{const t=byId('toast');t.textContent=msg;t.classList.remove('hidden');clearTimeout(window.__toastT);window.__toastT=setTimeout(()=>t.classList.add('hidden'),2200)}
 
@@ -113,7 +114,7 @@ function rowHtml(r){
        </div>`
     : `<span class='daily-mini'>未配置</span>`
 
-  return `<tr>
+  return `<tr data-id="${r.id}">
     <td><span title="点击复制ID" onclick="copyText('${r.id}')" style="cursor:pointer">${r.id}</span></td>
     <td><span class='name-wrap'>${r.name}</span><button class='icon-btn' title='修改名称' onclick="renameServer(${r.id}, '${(r.name||'').replace(/'/g,"\\'")}')">✎</button></td>
     <td>${r.server_type || '-'} · ${r.cores||0}C/${r.memory_gb||0}GB/${r.disk_gb||0}GB</td>
@@ -130,6 +131,35 @@ function rowHtml(r){
     </div></td>
   </tr>`
 }
+
+function patchTableRows(rows){
+  const tbody=byId('tb').querySelector('tbody')
+  const oldMap={}
+  Array.from(tbody.querySelectorAll('tr[data-id]')).forEach(tr=>{ oldMap[tr.getAttribute('data-id')] = tr })
+
+  const frag=document.createDocumentFragment()
+  const newCache={}
+
+  for(const r of rows){
+    const id=String(r.id)
+    const html=rowHtml(r)
+    newCache[id]=html
+    const oldTr=oldMap[id]
+
+    if(oldTr && __rowHtmlCache[id]===html){
+      frag.appendChild(oldTr)
+    }else{
+      const tmp=document.createElement('tbody')
+      tmp.innerHTML=html
+      frag.appendChild(tmp.firstElementChild)
+    }
+  }
+
+  tbody.innerHTML=''
+  tbody.appendChild(frag)
+  __rowHtmlCache=newCache
+}
+
 async function copyText(v){
   const text=String(v)
   let ok=false
@@ -210,7 +240,7 @@ async function loadData(showToast=false){
     const kw=(byId('kw').value||'').trim().toLowerCase(),r=await fetch('/api/servers'),data=await r.json(); CURRENT_SERVERS=data
     renderCards(data)
     const f=data.filter(x=>!kw||String(x.name).toLowerCase().includes(kw)||String(x.ip||'').toLowerCase().includes(kw)||String(x.id).includes(kw))
-    byId('tb').querySelector('tbody').innerHTML=f.map(rowHtml).join('')
+    patchTableRows(f)
     if(showToast) toast('已刷新')
   } finally { __loadingData=false }
 }
