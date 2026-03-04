@@ -102,6 +102,8 @@ function rowHtml(r){
   const policyOn=!!p.enabled
   const policyLabel=policyOn ? `策略 ${Math.round((Number(p.threshold||0))*100)}% · ${policyImageLabel(p.image_id)}` : '自动策略'
   const policyBtnClass = policyOn ? 'btn action policy-on' : 'btn action policy-off'
+  const usedPct = Math.min(100, ((Number(r.used_tb||0) / Number(r.limit_tb||20)) * 100))
+  const usedCell = `<div class="progress progress-mini"><div class="bar ${warn?'warn':''}" style="width:${usedPct}%"></div></div><div class="ratio-text">${formatTBPrecise(r.used_tb)} / ${formatTBPrecise(r.limit_tb)}</div>`
   const qbCell = q.enabled
     ? `<div class='qb-line'>
          <span class='qb-col'>↑ ${formatIECps(q.up_speed)}</span>
@@ -122,8 +124,8 @@ function rowHtml(r){
     <td>${r.ip||''}</td>
     <td><span class="badge ${r.status==='running'?'running':'other'}">${r.status}</span></td>
     <td>${qbCell}</td>
-    <td>${formatIEC(r.used_bytes)} (${formatTBPrecise(r.used_tb)})</td><td>${todayCell}</td><td>${formatTBPrecise(r.limit_tb)}</td>
-    <td><div class="progress"><div class="bar ${warn?'warn':''}" style="width:${pct}%"></div></div><div class="ratio-text">${pct.toFixed(1)}%</div></td>
+    <td>${usedCell}</td><td>${todayCell}</td><td>${formatTBPrecise(r.limit_tb)}</td>
+    <td><div class="ratio-text">${pct.toFixed(1)}%</div></td>
     <td><div class="op-row">
       <button class="btn action" onclick="openQBModal(${r.id})">配置qB</button>
       <button class="${policyBtnClass}" onclick="openAutoPolicyModal(${r.id})" title="${policyLabel}">${policyLabel}</button>
