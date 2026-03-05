@@ -1,4 +1,5 @@
 import asyncio
+import time
 import httpx
 from app.config import settings
 from app.runtime_config import RuntimeConfig
@@ -13,7 +14,7 @@ class TelegramControl:
         rc = self.runtime.get()
         self.token = str(rc.get("telegram_bot_token") or settings.telegram_bot_token or "")
         self.chat_id = str(rc.get("telegram_chat_id") or settings.telegram_chat_id or "")
-        self.offset = 0
+        self.offset = int(rc.get("telegram_update_offset") or 0)
 
     @property
     def enabled(self):
@@ -141,6 +142,14 @@ class TelegramControl:
             return await self.send(f"当前版本: {settings.app_version}", chat_id)
 
         if cmd == "/upgrade":
+            # prevent duplicate trigger caused by container restart / repeated delivery in short time
+            now = int(time.time())
+            rc = self.runtime.get()
+            last_ts = int(rc.get("last_upgrade_trigger_ts") or 0)
+            if now - last_ts < 45:
+                return await self.send("已有升级任务刚触发，请勿重复点击（45秒内防抖）", chat_id)
+            self.runtime.update({"last_upgrade_trigger_ts": now})
+
             await self.send("开始执行一键升级（拉取最新代码并重建容器）...", chat_id)
             # run upgrade in a dedicated helper container to avoid self-termination
             # use docker-compose run (container has docker-compose, but may not have docker cli)
@@ -166,12 +175,39 @@ class TelegramControl:
             return await self.send(f"升级任务已触发（task: {cid or 'n/a'}）。约30-90秒后生效。\n可点【🏷️ 版本号】或【📜 升级日志】确认。", chat_id)
 
         if cmd == "/upgradelog":
-            p = await asyncio.create_subprocess_shell("bash -lc 'tail -n 80 /opt/hzc/state/upgrade.log 2>/dev/null || echo no-log'", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+            if len(parts) >= 2 and parts[1].lower() == "full":
+                p = await asyncio.create_subprocess_shell("bash -lc 'tail -n 160 /opt/hzc/state/upgrade.log 2>/dev/null || echo no-log'", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                out, _ = await p.communicate()
+                txt = (out.decode("utf-8", errors="ignore") or "no-log").strip()
+                return await self.send(f"<code>{txt[-3200:]}</code>", chat_id)
+
+            p = await asyncio.create_subprocess_shell("bash -lc 'tail -n 300 /opt/hzc/state/upgrade.log 2>/dev/null || echo no-log'", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
             out, _ = await p.communicate()
             txt = (out.decode("utf-8", errors="ignore") or "no-log").strip()
-            ok = "[ok] 升级完成" in txt
-            status = "✅ 最近一次升级状态：成功" if ok else "⚠️ 最近一次升级状态：未确认成功（请查看日志）"
-            return await self.send(f"{status}\n\n<code>{txt[-3200:]}</code>", chat_id)
+            lines = txt.splitlines()
+
+            def pick(prefix: str):
+                for ln in reversed(lines):
+                    if prefix in ln:
+                        return ln.strip()
+                return ""
+
+            status = "✅ 成功" if "[ok] 升级完成" in txt else "⚠️ 未确认成功"
+            head_line = pick("代码已对齐 origin/main")
+            health_ok = "是" if "[i] 健康检查 /api/meta ..." in txt and "[x] 升级后健康检查失败" not in txt else "否"
+            fail_line = pick("[x]")
+            ps_line = pick("hetzner-traffic-guard")
+            msg = (
+                f"📜 升级摘要\n"
+                f"状态：{status}\n"
+                f"代码：{head_line or '未识别'}\n"
+                f"健康检查：{health_ok}\n"
+                f"服务：{ps_line or '未识别'}"
+            )
+            if fail_line:
+                msg += f"\n失败点：{fail_line}"
+            msg += "\n\n如需完整日志请回复：/upgradelog full"
+            return await self.send(msg[:3500], chat_id)
 
         if cmd == "/safeon":
             self.monitor.set_safe_mode(True)
@@ -280,7 +316,6 @@ class TelegramControl:
         if not self.enabled:
             return
         await self.set_menu()
-        await self.send("🤖 Hetzner Monitor 机器人已启动，发送 /start 查看命令", reply_markup=self.main_keyboard())
         while True:
             try:
                 async with httpx.AsyncClient(timeout=60) as c:
@@ -289,6 +324,8 @@ class TelegramControl:
                     data = r.json().get("result", [])
                 for u in data:
                     self.offset = u["update_id"] + 1
+                    # persist offset to avoid duplicate command replay after restart
+                    self.runtime.update({"telegram_update_offset": self.offset})
                     msg = u.get("message", {})
                     chat_id = str(msg.get("chat", {}).get("id", ""))
                     text = msg.get("text", "")
