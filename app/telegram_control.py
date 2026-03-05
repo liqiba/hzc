@@ -143,13 +143,12 @@ class TelegramControl:
         if cmd == "/upgrade":
             await self.send("开始执行一键升级（拉取最新代码并重建容器）...", chat_id)
             # run upgrade in a dedicated helper container to avoid self-termination
-            # image name may vary (hzc_... or hzc-...), so detect from running container first
+            # use docker-compose run (container has docker-compose, but may not have docker cli)
             upgrade_cmd = (
-                "set -e; mkdir -p /opt/hzc/state; "
-                "IMG=$(docker inspect -f \"{{.Config.Image}}\" hetzner-traffic-guard 2>/dev/null || echo hzc_hetzner-traffic-guard:latest); "
-                "CID=$(docker run -d --name hzc-upgrader-$(date +%s) --rm "
-                "-v /opt/hzc:/opt/hzc -v /var/run/docker.sock:/var/run/docker.sock "
-                "$IMG bash -lc \"cd /opt/hzc && ./scripts/upgrade.sh > /opt/hzc/state/upgrade.log 2>&1\"); "
+                "set -e; mkdir -p /opt/hzc/state; cd /opt/hzc; "
+                "CID=$(docker-compose run -d --name hzc-upgrader-$(date +%s) --no-deps "
+                "--entrypoint bash hetzner-traffic-guard "
+                "-lc \"cd /opt/hzc && ./scripts/upgrade.sh > /opt/hzc/state/upgrade.log 2>&1\"); "
                 "echo $CID"
             )
             p = await asyncio.create_subprocess_shell(
