@@ -151,11 +151,13 @@ class TelegramControl:
             self.runtime.update({"last_upgrade_trigger_ts": now})
 
             await self.send("开始执行一键升级（拉取最新代码并重建容器）...", chat_id)
-            # run upgrade in a dedicated helper container to avoid self-termination
-            # use docker-compose run (container has docker-compose, but may not have docker cli)
+            # run upgrade in helper container with a fixed lock name to prevent duplicate concurrent triggers
             upgrade_cmd = (
                 "set -e; mkdir -p /opt/hzc/state; cd /opt/hzc; "
-                "CID=$(docker-compose run -d --name hzc-upgrader-$(date +%s) --no-deps "
+                "if docker ps -a --format \"{{.Names}}\" | grep -q '^hzc-upgrader-lock$'; then "
+                "  echo '__UPGRADE_LOCKED__'; exit 12; "
+                "fi; "
+                "CID=$(docker-compose run -d --name hzc-upgrader-lock --no-deps "
                 "--entrypoint bash hetzner-traffic-guard "
                 "-lc \"cd /opt/hzc && ./scripts/upgrade.sh > /opt/hzc/state/upgrade.log 2>&1\"); "
                 "echo $CID"
@@ -166,9 +168,11 @@ class TelegramControl:
                 stderr=asyncio.subprocess.PIPE,
             )
             out, err = await p.communicate()
+            so = (out.decode("utf-8", errors="ignore") if out else "").strip()
+            se = (err.decode("utf-8", errors="ignore") if err else "").strip()
             if p.returncode != 0:
-                so = (out.decode("utf-8", errors="ignore") if out else "").strip()
-                se = (err.decode("utf-8", errors="ignore") if err else "").strip()
+                if "__UPGRADE_LOCKED__" in so or "hzc-upgrader-lock" in se:
+                    return await self.send("已有升级任务正在执行，请稍后查看【📜 升级日志】。", chat_id)
                 msg = (se or so or "unknown error")[-700:]
                 return await self.send(f"升级任务触发失败：{msg}", chat_id)
             cid = (out.decode("utf-8", errors="ignore") if out else "").strip()[:24]
@@ -316,6 +320,11 @@ class TelegramControl:
         if not self.enabled:
             return
         await self.set_menu()
+        # keep startup ping as requested
+        p = await asyncio.create_subprocess_shell("bash -lc 'hostname'", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        out, _ = await p.communicate()
+        host = (out.decode("utf-8", errors="ignore").strip() if out else "-")
+        await self.send(f"🤖 Hetzner Monitor 机器人已启动（{host}），发送 /start 查看命令", reply_markup=self.main_keyboard())
         while True:
             try:
                 async with httpx.AsyncClient(timeout=60) as c:
