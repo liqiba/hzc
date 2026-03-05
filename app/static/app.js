@@ -223,13 +223,15 @@ async function loadMeta(showToast=false){
   const p6=(META.primary_ipv6s||[])
   byId('c_primary_ip').innerHTML = p4.length
     ? ['<option value="">请选择已有IPv4（可选）</option>'].concat(p4.map(p=>`<option value="${p.id}">${p.ip}${p.name?` (${p.name})`:''}</option>`)).join('')
-    : '<option value="" selected>无可用IPv4</option>'
-  byId('c_primary_ip').disabled = !p4.length
+    : '<option value="__none__" selected>无可用IPv4</option>'
+  byId('c_primary_ip').disabled = false
+  byId('c_primary_ip').value = p4.length ? '' : '__none__'
 
   byId('c_primary_ipv6').innerHTML = p6.length
     ? ['<option value="">请选择已有IPv6（可选）</option>'].concat(p6.map(p=>`<option value="${p.id}">${p.ip}${p.name?` (${p.name})`:''}</option>`)).join('')
-    : '<option value="" selected>无可用IPv6</option>'
-  byId('c_primary_ipv6').disabled = !p6.length
+    : '<option value="__none__" selected>无可用IPv6</option>'
+  byId('c_primary_ipv6').disabled = false
+  byId('c_primary_ipv6').value = p6.length ? '' : '__none__'
   byId('c_location').onchange=()=>{renderTypeOptions();showTypePrice()}
   byId('c_type').onchange=showTypePrice
   byId('f_cores').onchange=renderTypeOptions
@@ -491,7 +493,7 @@ async function saveTGConfig(restartAfter=false){
   }
   closeTGModal()
 }
-async function submitCreate(){const body={name:byId('c_name').value||`srv-${Date.now()}`,server_type:byId('c_type').value,location:byId('c_location').value,image:byId('c_image').value,primary_ip_id: byId('c_primary_ip').value ? Number(byId('c_primary_ip').value) : null,primary_ipv6_id: byId('c_primary_ipv6').value ? Number(byId('c_primary_ipv6').value) : null};const r=await fetch('/api/create_server',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}),d=await r.json();if(!r.ok){alert(d?.detail||d?.error||'创建失败');return}toast('创建任务已提交');closeCreateModal();loadData()}
+async function submitCreate(){const v4=byId('c_primary_ip').value,v6=byId('c_primary_ipv6').value;const body={name:byId('c_name').value||`srv-${Date.now()}`,server_type:byId('c_type').value,location:byId('c_location').value,image:byId('c_image').value,primary_ip_id: (v4 && v4!=='__none__') ? Number(v4) : null,primary_ipv6_id: (v6 && v6!=='__none__') ? Number(v6) : null};const r=await fetch('/api/create_server',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}),d=await r.json();if(!r.ok){alert(d?.detail||d?.error||'创建失败');return}toast('创建任务已提交');closeCreateModal();loadData()}
 
 function openSnapshotsModal(){
   byId('snapshotsModal').classList.remove('hidden')
