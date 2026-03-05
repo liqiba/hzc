@@ -93,7 +93,11 @@ async def startup_event():
 
 @app.get('/', response_class=HTMLResponse)
 async def home(request: Request):
-    return templates.TemplateResponse('index.html', {'request': request, 'safe_mode': settings.safe_mode})
+    return templates.TemplateResponse('index.html', {
+        'request': request,
+        'safe_mode': settings.safe_mode,
+        'app_version': settings.app_version,
+    })
 
 
 @app.get('/api/servers')
