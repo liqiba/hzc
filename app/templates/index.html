@@ -52,6 +52,26 @@
     </div>
   </section>
 
+  <section class="panel glass" style="margin-top:12px">
+    <div class="panel-head">
+      <div class="panel-title">待创建队列</div>
+      <div class="hint">创建失败时自动加入队列，每5分钟自动重试，有机器后自动创建</div>
+    </div>
+    <div id="pendingQueue" class="table-wrap" style="min-height:40px">
+      <div class="daily-mini" style="padding:12px">加载中...</div>
+    </div>
+  </section>
+
+  <section class="panel glass" style="margin-top:12px">
+    <div class="panel-head">
+      <div class="panel-title">库存查询</div>
+      <button class="btn ghost small" onclick="loadStockCheck()">刷新</button>
+    </div>
+    <div id="stockPanel" class="table-wrap" style="min-height:40px">
+      <div class="daily-mini" style="padding:12px">点击「刷新」查看各机型可售状态</div>
+    </div>
+  </section>
+
   <div id="createModal" class="modal hidden">
     <div class="modal-card glass">
       <h3>创建新服务器</h3>
@@ -74,7 +94,7 @@
         <button class="btn ghost" onclick="refreshInventory()">刷新库存</button>
       </div>
       <div class="modal-actions">
-        <button class="btn primary" onclick="submitCreate()">创建</button>
+        <button class="btn primary" onclick="submitCreateWithQueue()">创建</button>
         <button class="btn" onclick="closeCreateModal()">取消</button>
       </div>
     </div>

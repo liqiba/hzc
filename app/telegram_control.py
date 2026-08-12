@@ -90,6 +90,8 @@ class TelegramControl:
             {"command": "safeon", "description": "开启安全模式"},
             {"command": "safeoff", "description": "关闭安全模式"},
             {"command": "safestatus", "description": "查看安全模式状态"},
+            {"command": "queue", "description": "查看待创建队列"},
+            {"command": "queuecancel", "description": "取消排队 /queuecancel <id>"},
         ]
         await self.api("setMyCommands", {"commands": cmds})
 
@@ -147,8 +149,9 @@ class TelegramControl:
                 "/startserver <ID> /stopserver <ID> /reboot <ID>\n/delete <ID> confirm /rebuild <ID> <snapshot_id>\n/resetpwd <ID> 重置并发送新密码\n"
                 "/version 查看版本 /upgrade 一键升级 /upgradelog 升级日志\n"
                 "/safeon /safeoff /safestatus 安全模式开关\n"
-                "/scheduleon /scheduleoff /schedulestatus (预留)\n/dnscheck /dnstest (预留)\n\n"
-                "你也可以直接点下方按钮。",
+                                "/queue 查看待创建队列 /queuecancel <id> 取消排队\n"
+                                "/scheduleon /scheduleoff /schedulestatus (预留)\n/dnscheck /dnstest (预留)\n\n"
+                                "你也可以直接点下方按钮。",
                 chat_id,
                 reply_markup=self.main_keyboard(),
             )
@@ -426,6 +429,35 @@ class TelegramControl:
 
         if cmd in ["/scheduleon", "/scheduleoff", "/schedulestatus", "/dnstest", "/dnscheck"]:
             return await self.send("该功能已预留，下一版接入。", chat_id)
+
+        if cmd == "/queue":
+            items = self.monitor.get_pending_queue()
+            if not items:
+                return await self.send("待创建队列为空。", chat_id)
+            lines = ["📋 待创建队列"]
+            for it in items:
+                sid = it.get("server_id") or "-"
+                lines.append(
+                    f"\n<code>{it.get('id','-')[:8]}</code> "
+                    f"{it.get('name','-')} · {it.get('server_type','-')} @ {it.get('location','-')}\n"
+                    f"状态: {it.get('status','?')} · 镜像: {it.get('image','-')}"
+                )
+            return await self.send("\n".join(lines)[:3800], chat_id)
+
+        if cmd == "/queuecancel" and len(parts) >= 2:
+            item_id = parts[1]
+            items = self.monitor.get_pending_queue()
+            target = None
+            for it in items:
+                if it.get("id") == item_id or it.get("id", "")[:8] == item_id:
+                    target = it.get("id")
+                    break
+            if not target:
+                return await self.send(f"未找到队列项: {item_id}", chat_id)
+            res = self.monitor.cancel_pending_queue(target)
+            if res.get("ok"):
+                return await self.send(f"✅ 已取消排队: {item_id}", chat_id)
+            return await self.send(f"取消失败: {res.get('error','未知')}", chat_id)
 
         return await self.send("未识别命令，发送 /help 查看用法", chat_id)
 

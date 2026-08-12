@@ -1,6 +1,6 @@
 services:
   hetzner-traffic-guard:
-    build: .
+    image: ghcr.io/wondermaker123/hzc:latest
     container_name: hetzner-traffic-guard
     restart: unless-stopped
     ports:

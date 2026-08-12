@@ -69,11 +69,13 @@ if [ -n "$TARGET_VERSION" ]; then
 fi
 
 if [ "$LOCAL_BEFORE" = "$REMOTE_HEAD" ]; then
-  echo "[i] 代码已是最新，执行轻量重载以应用版本号/环境变量..."
+  echo "[i] 代码已是最新，拉取镜像并轻量重载以应用版本号/环境变量..."
+  $COMPOSE_CMD pull >/dev/null 2>&1 || true
   $COMPOSE_CMD up -d >/dev/null 2>&1 || true
 else
-  echo "[i] 重建并更新容器..."
-  $COMPOSE_CMD up -d --build
+  echo "[i] 拉取最新镜像并更新容器..."
+  $COMPOSE_CMD pull
+  $COMPOSE_CMD up -d
 fi
 
 echo "[i] 健康检查 /api/ping ..."

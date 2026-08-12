@@ -108,6 +108,15 @@ class AutoPolicyReq(BaseModel):
     image_id: int | str | None = None
 
 
+class PendingQueueReq(BaseModel):
+    name: str
+    server_type: str
+    location: str
+    image: str | int
+    primary_ip_id: int | None = None
+    primary_ipv6_id: int | None = None
+
+
 @app.on_event('startup')
 async def startup_event():
     if settings.hetzner_token:
@@ -116,6 +125,17 @@ async def startup_event():
             'interval',
             minutes=settings.check_interval_minutes,
             id='check-traffic',
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+            next_run_time=dt.datetime.utcnow(),
+            misfire_grace_time=300,
+        )
+        scheduler.add_job(
+            monitor.check_pending_queue,
+            'interval',
+            minutes=settings.check_interval_minutes,
+            id='check-pending-queue',
             replace_existing=True,
             max_instances=1,
             coalesce=True,
@@ -360,6 +380,33 @@ async def create_server(req: CreateServerReq):
     return {"ok": True, "queued": True, "job_id": job_id, "message": "create started in background"}
 
 
+@app.post('/api/create_server_direct')
+async def create_server_direct(req: PendingQueueReq):
+    """同步创建：直接尝试创建，成功返回服务器信息，失败原因明确"""
+    if not settings.hetzner_token:
+        raise HTTPException(status_code=500, detail='HETZNER_TOKEN missing')
+    try:
+        result = await asyncio.wait_for(
+            monitor.create_server_manual(
+                name=req.name,
+                server_type=req.server_type,
+                location=req.location,
+                image=req.image,
+                primary_ip_id=req.primary_ip_id,
+                primary_ipv6_id=req.primary_ipv6_id,
+            ),
+            timeout=120,
+        )
+        if result.get("ok") is False:
+            err = str(result.get("error", "") or "")
+            result["retryable"] = "resource_unavailable" in err.lower() or "412" in err
+        return result
+    except asyncio.TimeoutError:
+        return {"ok": False, "error": "创建超时（120秒），可能是API无可用机器", "retryable": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:500], "retryable": ("resource_unavailable" in str(e).lower() or "412" in str(e))}
+
+
 @app.delete('/api/snapshot/{image_id}')
 async def delete_snapshot(image_id: int):
     if not settings.hetzner_token:
@@ -421,3 +468,39 @@ async def action_status(action_id: int):
     if not settings.hetzner_token:
         raise HTTPException(status_code=500, detail='HETZNER_TOKEN missing')
     return await monitor.get_action_status(action_id)
+
+
+# ────────── 待创建队列 API ──────────
+
+
+@app.get('/api/pending_queue')
+async def pending_queue_list():
+    """获取待创建队列列表"""
+    return monitor.get_pending_queue()
+
+
+@app.get('/api/stock_check')
+async def stock_check():
+    """查询各机型在各机房的可售状态"""
+    if not settings.hetzner_token:
+        raise HTTPException(status_code=500, detail='HETZNER_TOKEN missing')
+    return await monitor.stock_check()
+
+
+@app.post('/api/pending_queue')
+async def pending_queue_add(req: PendingQueueReq):
+    """加入待创建队列"""
+    return monitor.add_pending_queue(
+        name=req.name,
+        server_type=req.server_type,
+        location=req.location,
+        image=req.image,
+        primary_ip_id=req.primary_ip_id,
+        primary_ipv6_id=req.primary_ipv6_id,
+    )
+
+
+@app.delete('/api/pending_queue/{item_id}')
+async def pending_queue_cancel(item_id: str):
+    """取消排队项"""
+    return monitor.cancel_pending_queue(item_id)

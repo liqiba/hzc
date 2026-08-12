@@ -8,6 +8,7 @@ from app.qb_client import QBClient
 from app.qb_store import QBStore
 from app.auto_policy_store import AutoPolicyStore
 from app.runtime_config import RuntimeConfig
+from app.pending_store import PendingStore
 
 # Keep same unit behavior as Hetzner panel (binary TiB, though UI labels TB)
 BYTES_IN_TB = 1024**4
@@ -21,6 +22,7 @@ class MonitorService:
         self.qb_store = QBStore(settings.qb_store_path)
         self.auto_policy = AutoPolicyStore(settings.auto_policy_path)
         self.runtime = RuntimeConfig(settings.runtime_config_path)
+        self.pending_queue = PendingStore(settings.pending_queue_path)
         self.last_snapshot = []
         self._collect_cache = []
         self._collect_cache_ts = 0.0
@@ -343,6 +345,10 @@ class MonitorService:
                 "auto_policy": pol,
             }
             rows.append(row)
+        # 清理未回收的 qB 任务（服务器已删除但 qB 节点配置残留的情况）
+        for sid, t in qb_tasks.items():
+            if not t.done():
+                t.cancel()
         self.last_snapshot = rows
         self._collect_cache = rows
         self._collect_cache_ts = dt.datetime.utcnow().timestamp()
@@ -398,7 +404,9 @@ class MonitorService:
             limit_tb = float(row.get("limit_tb", 20) or 20)
             rt = realtime_used_tb.get(int(row.get("id") or 0))
             if rt:
-                used_tb = float(rt.get("used_tb", used_tb))
+                # 取 metrics 实时值与 list_servers 值的较大者
+                # 避免 metrics 1小时采样率低估导致漏触发
+                used_tb = max(float(rt.get("used_tb", used_tb)), used_tb)
             over = bool(limit_tb > 0 and (used_tb / limit_tb) >= threshold)
 
             st = guard_state.get(sid) or {}
@@ -466,7 +474,18 @@ class MonitorService:
                     f"当前: {used_tb:.2f} TB / 阈值: {threshold:.2f} TB\n"
                     f"镜像/快照: {image_id}"
                 )
-                await self.rebuild_with_snapshot_manual(row["id"], image_id)
+                result = await self.rebuild_with_snapshot_manual(row["id"], image_id)
+                if not (result or {}).get("ok"):
+                    err = str((result or {}).get("error", "未知错误（重建返回异常）"))[:500]
+                    await self.tg.send(
+                        f"❌ 自动重建失败: {row['name']} (ID:{row['id']})\n"
+                        f"错误: {err}"
+                    )
+                elif (result or {}).get("queued"):
+                    await self.tg.send(
+                        f"📋 自动重建已加入待创建队列: {row['name']} (ID:{row['id']})\n"
+                        f"系统将持续重试，有可用机器后自动创建"
+                    )
 
         self.runtime.update({"traffic_guard_state": guard_state})
 
@@ -997,7 +1016,8 @@ class MonitorService:
 
         name = srv.get("name", f"server-{server_id}")
         server_type = (srv.get("server_type") or {}).get("name")
-        location = ((srv.get("datacenter") or {}).get("location") or {}).get("name")
+        # Hetzner API 返回 location 在顶层字段，部分服务器 datacenter 为 null
+        location = (srv.get("location") or {}).get("name") or ((srv.get("datacenter") or {}).get("location") or {}).get("name")
         if not server_type or not location:
             return {"ok": False, "error": "missing source server type/location"}
 
@@ -1009,6 +1029,10 @@ class MonitorService:
             day_bytes_snapshot = int(await self.client.get_outbound_today_bytes(server_id, settings.timezone))
         except Exception:
             day_bytes_snapshot = 0
+        try:
+            daily_points_snapshot = await self.client.get_outbound_daily(server_id, days=30)
+        except Exception:
+            daily_points_snapshot = []
 
         async def _wait_action_success(action_id: int, title: str):
             for _ in range(90):
@@ -1058,7 +1082,33 @@ class MonitorService:
             self._merge_rollover_daily_history(daily_points_snapshot, exclude_today=True)
             created = await _create_with_retry()
             path = "fast"
-        except Exception:
+        except Exception as e:
+            fast_detail = str(e)
+            if isinstance(e, httpx.HTTPStatusError) and e.response is not None:
+                try:
+                    fast_detail = f"HTTP {e.response.status_code}: {e.response.text}"
+                except Exception:
+                    fast_detail = str(e)
+
+            # 旧服务器已删除但创建失败（无库存）→ 加入待创建队列
+            if "resource_unavailable" in fast_detail.lower() or "\"code\": \"resource_unavailable\"" in fast_detail:
+                self.add_pending_queue(
+                    name=name,
+                    server_type=server_type,
+                    location=location,
+                    image=image,
+                    primary_ip_id=int(ipv4_id) if ipv4_id else None,
+                    primary_ipv6_id=int(ipv6_id) if ipv6_id else None,
+                )
+                await self.tg.send(
+                    f"📋 自动重建已加入待创建队列\n"
+                    f"服务器: {name} (原ID: {server_id})\n"
+                    f"配置: {server_type} @ {location}\n"
+                    f"镜像/快照: {image}\n"
+                    f"原因: Hetzner 当前无可用库存，系统将持续重试"
+                )
+                return {"ok": True, "queued": True, "message": "已加入待创建队列，系统将持续重试"}
+
             # SAFE fallback (best-effort): if old server still exists, poweroff+unassign then create
             try:
                 still = await self.client.get_server(server_id)
@@ -1228,6 +1278,135 @@ class MonitorService:
     def auto_policy_delete(self, server_id: int):
         self.auto_policy.delete(server_id)
         return {"ok": True, "server_id": server_id}
+
+    # ──────────────────────────────
+    # 待创建队列（API无机器时自动排队重试）
+    # ──────────────────────────────
+
+    def get_pending_queue(self) -> list[dict]:
+        return self.pending_queue.all()
+
+    def add_pending_queue(self, name: str, server_type: str, location: str, image,
+                          primary_ip_id: int | None = None, primary_ipv6_id: int | None = None) -> dict:
+        item = {
+            "name": name,
+            "server_type": server_type,
+            "location": location,
+            "image": image,
+            "primary_ip_id": primary_ip_id,
+            "primary_ipv6_id": primary_ipv6_id,
+        }
+        item_id = self.pending_queue.add(item)
+        return {"ok": True, "id": item_id, "message": "已加入待创建队列，系统将每5分钟检查可用性，有机器后自动创建。"}
+
+    def cancel_pending_queue(self, item_id: str) -> dict:
+        entry = self.pending_queue.get(item_id)
+        if not entry:
+            return {"ok": False, "error": "队列项不存在"}
+        if entry.get("status") != "pending":
+            return {"ok": False, "error": f"当前状态为 {entry.get('status')}，无法取消"}
+        self.pending_queue.update(item_id, status="cancelled")
+        return {"ok": True, "message": "已取消排队"}
+
+    async def check_pending_queue(self):
+        """定时任务：检查并尝试创建 pending 队列中的机器"""
+        items = self.pending_queue.pending_items()
+        if not items:
+            return
+
+        for item in items:
+            item_id = item.get("id")
+            if not item_id:
+                continue
+
+            self.pending_queue.update(item_id, status="creating")
+            try:
+                result = await self.create_server_manual(
+                    name=item.get("name", "pending-server"),
+                    server_type=item.get("server_type", ""),
+                    location=item.get("location", ""),
+                    image=item.get("image", "debian-12"),
+                    primary_ip_id=item.get("primary_ip_id"),
+                    primary_ipv6_id=item.get("primary_ipv6_id"),
+                )
+                if result.get("ok") is False:
+                    err = str(result.get("error", "") or "")
+                    # 仅 resource_unavailable 可重试，其余错误标记为失败
+                    if "resource_unavailable" in err.lower() or "412" in err:
+                        self.pending_queue.update(item_id, status="pending")
+                        continue
+                    self.pending_queue.update(item_id, status="failed", error=err)
+                    await self.tg.send(
+                        f"❌ 排队创建失败: {item.get('name')}\n"
+                        f"错误: {err[:500]}"
+                    )
+                    continue
+
+                # 创建成功
+                srv = result.get("server", {})
+                new_id = srv.get("id")
+                new_ip = (srv.get("public_net") or {}).get("ipv4", {}).get("ip", "-")
+                self.pending_queue.update(item_id, status="created", server_id=new_id)
+                await self.tg.send(
+                    f"✅ 排队创建成功: {item.get('name')}\n"
+                    f"新服务器ID: {new_id}\n"
+                    f"IP: {new_ip}\n"
+                    f"配置: {item.get('server_type')} @ {item.get('location')}"
+                )
+            except Exception as e:
+                self.pending_queue.update(item_id, status="pending")
+                import traceback
+                traceback.print_exc()
+
+    async def stock_check(self) -> dict:
+        """查询各机型在各机房的可售状态与价格"""
+        try:
+            types = await self.client.list_server_types()
+        except Exception:
+            types = []
+        try:
+            locations = await self.client.list_locations()
+        except Exception:
+            locations = []
+
+        loc_names = [l.get("name") for l in (locations or []) if isinstance(l, dict)]
+
+        def _type_family(name=""):
+            return name.rstrip("0123456789")
+
+        rows = []
+        for t in (types or []):
+            if not isinstance(t, dict):
+                continue
+            name = t.get("name", "")
+            prices = [p for p in (t.get("prices") or []) if isinstance(p, dict)]
+            sellable = {}
+            for p in prices:
+                loc = p.get("location")
+                if loc:
+                    pm = p.get("price_monthly") or {}
+                    try:
+                        gross = float(pm.get("gross")) if pm.get("gross") is not None else None
+                    except Exception:
+                        gross = None
+                    sellable[loc] = {
+                        "sellable": True,
+                        "monthly_gross_eur": gross,
+                    }
+            for loc in loc_names:
+                if loc not in sellable:
+                    sellable[loc] = {"sellable": False, "monthly_gross_eur": None}
+
+            rows.append({
+                "name": name,
+                "family": _type_family(name),
+                "cores": t.get("cores"),
+                "memory": t.get("memory"),
+                "disk": t.get("disk"),
+                "sellable": sellable,
+            })
+
+        return {"locations": loc_names, "types": rows}
 
 
 monitor = MonitorService()

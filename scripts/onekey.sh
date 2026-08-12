@@ -78,8 +78,9 @@ do_install() {
   grep -q '^CHECK_INTERVAL_MINUTES=' .env || echo 'CHECK_INTERVAL_MINUTES=5' >> .env
   grep -q '^SAFE_MODE=' .env || echo 'SAFE_MODE=true' >> .env
 
-  echo "[i] 正在构建并启动..."
-  $COMPOSE_CMD up -d --build
+  echo "[i] 正在拉取镜像并启动..."
+  $COMPOSE_CMD pull
+  $COMPOSE_CMD up -d
 
   echo "[ok] 已启动"
   echo "访问: http://$(hostname -I | awk '{print $1}'):1227"

@@ -919,12 +919,133 @@ async function deleteQBNode(){
   closeQBModal(); loadAll(false)
 }
 
+// ────── 待创建队列 ──────
+
+let PENDING_QUEUE = []
+
+async function loadPendingQueue(){
+  try{
+    const r=await fetch('/api/pending_queue')
+    PENDING_QUEUE = await r.json()
+    renderPendingQueue()
+  }catch(e){}
+}
+
+function renderPendingQueue(){
+  const box=byId('pendingQueue')
+  if(!box) return
+  const items=Array.isArray(PENDING_QUEUE)?PENDING_QUEUE:[]
+  const active=items.filter(i=>['pending','creating'].includes(i.status))
+  const done=items.filter(i=>!['pending','creating'].includes(i.status))
+  if(!items.length){
+    box.innerHTML='<div class="daily-mini">暂无待创建队列</div>'
+    return
+  }
+  const statusMap={'pending':'⏳ 等待中','creating':'🔄 创建中','created':'✅ 已创建','failed':'❌ 失败','cancelled':'🚫 已取消'}
+  const rows=active.map(i=>`<tr>
+    <td><code>${(i.id||'').slice(0,8)}</code></td>
+    <td>${i.name||'-'}</td>
+    <td>${i.server_type||'-'} @ ${i.location||'-'}</td>
+    <td>${i.image||'-'}</td>
+    <td><span class="badge ${i.status}">${statusMap[i.status]||i.status}</span></td>
+    <td>${i.status==='pending'?`<button class="btn btn-danger action small" onclick="cancelPending('${i.id}')">取消排队</button>`:''}</td>
+  </tr>`).join('')
+  const doneRows=done.map(i=>`<tr class="dim">
+    <td><code>${(i.id||'').slice(0,8)}</code></td>
+    <td>${i.name||'-'}</td>
+    <td>${i.server_type||'-'} @ ${i.location||'-'}</td>
+    <td>${i.image||'-'}</td>
+    <td><span class="badge ${i.status}">${statusMap[i.status]||i.status}</span></td>
+    <td>${i.server_id?`ID: ${i.server_id}`:''}</td>
+  </tr>`).join('')
+  box.innerHTML=`<table class="queue-table"><thead><tr>
+    <th>ID</th><th>名称</th><th>配置</th><th>镜像</th><th>状态</th><th>操作</th>
+  </tr></thead><tbody>${rows}${doneRows}</tbody></table>`
+}
+
+async function cancelPending(id){
+  if(!confirm(`确认取消排队 ${id.slice(0,8)} ？`)) return
+  const r=await fetch(`/api/pending_queue/${id}`,{method:'DELETE'})
+  const d=await r.json()
+  if(!r.ok||!d?.ok){alert(d?.error||'取消失败');return}
+  toast('已取消排队')
+  loadPendingQueue()
+}
+
+async function submitCreateWithQueue(){
+  const name=byId('c_name').value.trim()||'server-'+Date.now()
+  const type=byId('c_type').value
+  const loc=byId('c_location').value
+  const image=byId('c_image').value
+  const ip4=byId('c_primary_ip').value||null
+  const ip6=byId('c_primary_ipv6').value||null
+  const body={name,server_type:type,location:loc,image,primary_ip_id:ip4,primary_ipv6_id:ip6}
+  const r=await fetch('/api/pending_queue',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)})
+  const d=await r.json()
+  if(d?.ok){
+    toast('已加入待创建队列，系统每5分钟自动重试')
+    closeCreateModal()
+    loadPendingQueue()
+  }else{
+    alert('加入队列失败：'+(d?.error||'未知'))
+  }
+}
+
+// ────── 库存查询 ──────
+
+let STOCK_DATA = null
+
+async function loadStockCheck(){
+  const box=byId('stockPanel')
+  if(!box) return
+  box.innerHTML='<div class="daily-mini" style="padding:12px">查询中...</div>'
+  try{
+    const r=await fetch('/api/stock_check')
+    STOCK_DATA = await r.json()
+    renderStockCheck()
+  }catch(e){
+    box.innerHTML='<div class="daily-mini" style="padding:12px;color:var(--red)">查询失败</div>'
+  }
+}
+
+function renderStockCheck(){
+  const box=byId('stockPanel')
+  if(!box || !STOCK_DATA) return
+  const locs=STOCK_DATA.locations||[]
+  const types=STOCK_DATA.types||[]
+  if(!types.length){
+    box.innerHTML='<div class="daily-mini">暂无数据</div>'
+    return
+  }
+  let html='<table class="stock-table"><thead><tr><th>机型</th><th>配置</th>'
+  for(const l of locs) html+=`<th>${l}</th>`
+  html+='</tr></thead><tbody>'
+  for(const t of types){
+    const spec=`${t.cores||'?'}C/${t.memory||'?'}GB/${t.disk||'?'}GB`
+    html+=`<tr><td><b>${t.name}</b></td><td class="spec">${spec}</td>`
+    for(const l of locs){
+      const s=t.sellable?.[l]||{}
+      if(s.sellable){
+        const price=s.monthly_gross_eur?`€${s.monthly_gross_eur.toFixed(2)}`:''
+        html+=`<td class="stock-yes" title="${price}">🟢${price?' '+price:''}</td>`
+      }else{
+        html+=`<td class="stock-no">—</td>`
+      }
+    }
+    html+='</tr>'
+  }
+  html+='</tbody></table>'
+  box.innerHTML=html
+}
+
 if(byId('kw')) byId('kw').addEventListener('input',()=>applyServerFilter())
 initTheme();
 bootstrapFromCache()
 loadAll(false)
+loadPendingQueue()
 // layered refresh: qB high-frequency, others lower frequency
 setInterval(()=>{ if(!document.hidden) loadQBRealtime() }, 3000)
 setInterval(()=>{ if(!document.hidden) loadData(false) }, 15000)
 setInterval(()=>{ if(!document.hidden && __dailyLoaded) loadDaily(false) }, 60000)
 setInterval(()=>{ if(!document.hidden) loadMeta(false) }, 300000)
+setInterval(()=>{ if(!document.hidden) loadPendingQueue() }, 30000)
